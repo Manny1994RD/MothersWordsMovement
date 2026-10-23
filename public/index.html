@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffd84a">
+  <title>Mother's Words Movement</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/icon.svg" alt="" width="34" height="36" style="image-rendering:pixelated">
+      <div class="brand-text">
+        <b id="region-name">Mother's Words Movement</b>
+        <small data-i18n="tagline">40 Days of Mother's Love</small>
+      </div>
+    </div>
+    <button id="lang-toggle" class="lang" type="button">ES</button>
+  </header>
+  <main id="app" aria-live="polite"></main>
+  <nav class="tabs" id="tabs">
+    <a href="#/" data-tab="home" data-icon="heart"><span class="ico"></span><span data-i18n="nav_home">Home</span></a>
+    <a href="#/board" data-tab="board" data-icon="globe"><span class="ico"></span><span data-i18n="nav_board">Region</span></a>
+    <a href="#/team" data-tab="team" data-icon="people"><span class="ico"></span><span data-i18n="nav_team">Team</span></a>
+    <a href="#/stories" data-tab="stories" data-icon="letters"><span class="ico"></span><span data-i18n="nav_stories">Stories</span></a>
+  </nav>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <script src="/pixel.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
