@@ -417,3 +417,7 @@ label.field small { display: block; margin-top: 4px; font-size: 13px; }
 .ok { color: var(--leaf); font-weight: 700; }
 details.card > summary { list-style: none; cursor: pointer; }
 details.card > summary::-webkit-details-marker { display: none; }
+.word-passage {
+  margin: 12px 0 0; padding-top: 10px; border-top: 2px dashed var(--line);
+  font-size: 15px !important; font-weight: 600 !important; color: var(--purple) !important; white-space: pre-wrap;
+}

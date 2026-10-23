@@ -707,10 +707,17 @@ async function viewHome() {
     } }, h('h2', icon('heart'), t('save_spot')), h('p.small.muted', { style: 'margin-top:0' }, t('save_spot_intro')),
       prof.nodes, h('button.btn', { type: 'submit' }, t('save')), perr));
   }
-  if (me.word) out.push(h('div.card.word', h('h2', icon('star'), t('word_today')), h('p', pickText(me.word))));
-  // One of the 9 phrases is spotlighted each day.
+  // One of the 9 phrases is spotlighted each day; the word of the day follows the same order.
   const focusIdx = me.checklist.length ? (Math.max(1, me.campaign.day_number) - 1) % me.checklist.length : -1;
-  if (focusIdx >= 0) {
+  if (me.word) {
+    // First line is the phrase, then its description, then (some days) a passage from the poster.
+    const [quote, ...rest] = pickText(me.word).split('\n');
+    const [desc, ...extra] = rest.join('\n').split('\n\n');
+    out.push(h('div.card.focus-card', h('h2', icon('star'), t('word_today'), focusIdx >= 0 ? h('span.focus-num', focusIdx + 1) : null),
+      h('p.focus-quote', quote),
+      desc ? h('p.small.muted', { style: 'margin:0' }, desc) : null,
+      extra.length ? h('p.word-passage', extra.join('\n\n')) : null));
+  } else if (focusIdx >= 0) {
     const lines = pickText(me.checklist[focusIdx]).split('\n');
     out.push(h('div.card.focus-card', h('h2', icon('daisy'), t('focus_today'), h('span.focus-num', focusIdx + 1)),
       h('p.focus-quote', lines[lines.length - 1]), lines.length > 1 ? h('p.small.muted', { style: 'margin:0' }, lines.slice(0, -1).join(' ')) : null));

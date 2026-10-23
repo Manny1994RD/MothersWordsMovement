@@ -4,7 +4,7 @@ ENV NODE_ENV=production \
     PORT=8080 \
     DATA_DIR=/data
 WORKDIR /app
-COPY package.json server.js badges.js seed-checklist.json ./
+COPY package.json server.js badges.js seed-checklist.json seed-words.json ./
 COPY public ./public
 RUN mkdir -p /data && chown node:node /data
 USER node

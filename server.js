@@ -148,6 +148,11 @@ const DEFAULT_SETTINGS = {
 for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
   db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(k, v);
 }
+// Words of the day from the "Words of Mother's Love" posters (EN/ES); editable in Admin.
+if (db.prepare('SELECT COUNT(*) AS n FROM daily_words').get().n === 0) {
+  const ins = db.prepare('INSERT INTO daily_words (day_number, text_en, text_es) VALUES (?, ?, ?)');
+  for (const w of require('./seed-words.json')) ins.run(w.day, w.en, w.es);
+}
 if (db.prepare('SELECT COUNT(*) AS n FROM checklist_items').get().n === 0) {
   const seed = require('./seed-checklist.json');
   const ins = db.prepare('INSERT INTO checklist_items (text_en, text_es, sort) VALUES (?, ?, ?)');
