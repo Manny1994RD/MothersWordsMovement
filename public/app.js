@@ -11,7 +11,7 @@ const I18N = {
     day_of: (d, t) => `Day ${d} of ${t}`, starts_in: (n) => `Starts in ${n} day${n === 1 ? '' : 's'}`,
     finished: 'The 40 days are complete — thank you!', word_today: "Today's word",
     my_today: 'My activity today', visits: 'Visits', returned: 'Members returned', prayers: 'Prayers for members',
-    letters: 'Letters to Mother', visits_hint: 'Visits made to members', returned_hint: 'Came back to church',
+    letters: 'Letters to Mother', visits_hint: 'Visits made to members', returned_hint: 'Someone who came back to church',
     prayers_hint: 'Times you prayed for a member', letters_hint: 'Letters sent to Mother',
     my_total: (n) => `My total: ${n}`, saved: 'Saved ✓',
     checklist: "Mother's words in practice", streak: (n) => `${n}-day streak`, streak_zero: 'Check one off today to start a streak!',
@@ -23,6 +23,13 @@ const I18N = {
     milestone: (p, who) => `🎉 ${who} reached ${p}% of the goal!`, you_church: 'Your church', the_region: 'The region',
     switch_church: 'Switch church', switch_confirm: 'Leave this church on this phone? Your past counts stay recorded.',
     admin: 'Admin', pin: 'Admin PIN', login: 'Log in', bad_pin: 'Wrong PIN.',
+    leader: 'Leaders', leader_title: 'Leader page', leader_intro: 'For church leaders and the Elder: set goals and enter counts for members who can’t update on their own.',
+    leader_pin: 'Leader PIN', elder_note: 'Logged in as Elder — you can manage any church.',
+    goals: 'Church goals', save_goals: 'Save goals', for_member: 'Enter for a member',
+    for_member_intro: 'Adds to the church totals. No names — only numbers.', date: 'Date',
+    phrases_practiced: 'Phrases practiced (of the 9)', add_entry: 'Add entry', added: 'Added ✓',
+    recent: 'Entered by leaders', none_yet: 'Nothing entered yet.', remove: 'Remove', remove_confirm: 'Remove this entry?',
+    by_elder: 'Elder', by_leader: 'Leader', log_out: 'Log out', empty_entry: 'Enter at least one number.',
   },
   es: {
     nav_home: 'Inicio', nav_board: 'Región', nav_stories: 'Historias', tagline: '40 días del amor de la Madre',
@@ -33,7 +40,7 @@ const I18N = {
     day_of: (d, t) => `Día ${d} de ${t}`, starts_in: (n) => `Comienza en ${n} día${n === 1 ? '' : 's'}`,
     finished: 'Los 40 días han terminado — ¡gracias!', word_today: 'Palabra de hoy',
     my_today: 'Mi actividad de hoy', visits: 'Visitas', returned: 'Miembros que regresaron', prayers: 'Oraciones por miembros',
-    letters: 'Cartas a la Madre', visits_hint: 'Visitas hechas a miembros', returned_hint: 'Regresaron a la iglesia',
+    letters: 'Cartas a la Madre', visits_hint: 'Visitas hechas a miembros', returned_hint: 'Alguien que regresó a la iglesia',
     prayers_hint: 'Veces que oraste por un miembro', letters_hint: 'Cartas enviadas a la Madre',
     my_total: (n) => `Mi total: ${n}`, saved: 'Guardado ✓',
     checklist: 'Palabras de la Madre en práctica', streak: (n) => `Racha de ${n} día${n === 1 ? '' : 's'}`, streak_zero: '¡Marca uno hoy para empezar una racha!',
@@ -45,6 +52,13 @@ const I18N = {
     milestone: (p, who) => `🎉 ¡${who} alcanzó el ${p}% de la meta!`, you_church: 'Tu iglesia', the_region: 'La región',
     switch_church: 'Cambiar iglesia', switch_confirm: '¿Salir de esta iglesia en este teléfono? Tus números anteriores se quedan registrados.',
     admin: 'Admin', pin: 'PIN de administrador', login: 'Entrar', bad_pin: 'PIN incorrecto.',
+    leader: 'Líderes', leader_title: 'Página de líderes', leader_intro: 'Para líderes de iglesia y el Anciano: fijar metas e ingresar números por miembros que no pueden hacerlo solos.',
+    leader_pin: 'PIN de líder', elder_note: 'Conectado como Anciano — puede administrar cualquier iglesia.',
+    goals: 'Metas de la iglesia', save_goals: 'Guardar metas', for_member: 'Ingresar por un miembro',
+    for_member_intro: 'Se suma a los totales de la iglesia. Sin nombres — solo números.', date: 'Fecha',
+    phrases_practiced: 'Frases practicadas (de las 9)', add_entry: 'Agregar', added: 'Agregado ✓',
+    recent: 'Ingresado por líderes', none_yet: 'Nada ingresado todavía.', remove: 'Quitar', remove_confirm: '¿Quitar esta entrada?',
+    by_elder: 'Anciano', by_leader: 'Líder', log_out: 'Salir', empty_entry: 'Ingrese al menos un número.',
   },
 };
 
@@ -70,7 +84,7 @@ function h(sel, attrs, ...kids) {
   const [tag, ...classes] = sel.split('.');
   const el = document.createElement(tag || 'div');
   if (classes.length) el.className = classes.join(' ');
-  if (attrs && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) { kids.unshift(attrs); attrs = null; }
+  if (attrs != null && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) { kids.unshift(attrs); attrs = null; }
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
@@ -88,7 +102,9 @@ async function api(path, opts = {}) {
   const token = store.get('member');
   if (token) headers['X-Member'] = token;
   const pin = sessionStorage.getItem('adminPin');
-  if (pin && path.startsWith('/api/admin')) headers['X-Admin-Pin'] = pin;
+  if (pin && (path.startsWith('/api/admin') || path.startsWith('/api/leader'))) headers['X-Admin-Pin'] = pin;
+  const leaderPin = sessionStorage.getItem('leaderPin');
+  if (leaderPin && path.startsWith('/api/leader')) headers['X-Leader-Pin'] = leaderPin;
   const res = await fetch(path, {
     method: opts.body ? 'POST' : 'GET',
     headers,
@@ -280,7 +296,7 @@ async function viewHome() {
     h('a', { href: '#', onclick: (e) => {
       e.preventDefault();
       if (confirm(t('switch_confirm'))) { store.del('member'); route(); }
-    } }, t('switch_church')), ' · ', h('a', { href: '#/admin' }, t('admin'))));
+    } }, t('switch_church')), ' · ', h('a', { href: '#/leader' }, t('leader')), ' · ', h('a', { href: '#/admin' }, t('admin'))));
 
   if (me.church) checkMilestones(`c${me.church.id}`, t('you_church'), me.church);
   checkMilestones('region', t('the_region'), me.region);
@@ -419,14 +435,15 @@ async function viewAdmin() {
   const churchForm = (c = {}) => {
     const name = h('input', { type: 'text', value: c.name || '', placeholder: 'Church name' });
     const code = h('input', { type: 'text', value: c.join_code || '', placeholder: 'Join code' });
+    const lpin = h('input', { type: 'text', value: c.leader_pin || '', placeholder: 'Leader PIN' });
     const gv = h('input', { type: 'number', min: 0, value: c.goal_visits ?? 0 });
     const gr = h('input', { type: 'number', min: 0, value: c.goal_returned ?? 0 });
     const gl = h('input', { type: 'number', min: 0, value: c.goal_letters ?? 0 });
     return h('form.admin-row', { onsubmit: (e) => {
       e.preventDefault();
-      post('/api/admin/church', { id: c.id, name: name.value, join_code: code.value, goal_visits: gv.value, goal_returned: gr.value, goal_letters: gl.value });
+      post('/api/admin/church', { id: c.id, name: name.value, join_code: code.value, leader_pin: lpin.value, goal_visits: gv.value, goal_returned: gr.value, goal_letters: gl.value });
     } },
-      h('div.grid2', name, code),
+      h('div.grid3', field('Church name', name), field('Member join code', code), field('Leader PIN', lpin)),
       h('div.grid3', field('Goal: visits', gv), field('Goal: returned', gr), field('Goal: letters', gl)),
       h('div.actions',
         h('button.btn.sm', { type: 'submit' }, c.id ? 'Save' : '+ Add church'),
@@ -436,7 +453,7 @@ async function viewAdmin() {
     );
   };
   const churches = h('div.card', h('h2', '⛪ Churches & goals'),
-    h('p.small.muted', 'Members join with the church code. Prayers are counted but have no goal.'),
+    h('p.small.muted', 'Members join with the join code. Leaders use the leader PIN on the Leaders page to edit goals and enter counts for members. Prayers are counted but have no goal.'),
     d.churches.map(churchForm), churchForm());
 
   // Checklist
@@ -477,6 +494,7 @@ async function viewAdmin() {
 
   // Export / reset
   const tools = h('div.card', h('h2', '🧰 Tools'),
+    h('p', h('a.btn.ghost', { href: '#/leader' }, 'Open the Leaders page (enter counts / goals for any church)')),
     h('div.actions',
       h('button.btn.ghost', { type: 'button', onclick: async () => {
         const res = await fetch('/api/admin/export.csv', { headers: { 'X-Admin-Pin': sessionStorage.getItem('adminPin') } });
@@ -493,8 +511,134 @@ async function viewAdmin() {
   return [h('h1', '🔐 Admin'), settings, churches, checklist, wordsCard, stories, tools];
 }
 
+// ---------- Leaders (and the Elder) ----------
+async function viewLeader() {
+  const info = await api('/api/info');
+  document.getElementById('region-name').textContent = info.campaign.region_name;
+  const isElder = !!sessionStorage.getItem('adminPin');
+  let churchId = Number(sessionStorage.getItem('leaderChurch')) || (isElder ? info.churches[0]?.id : 0);
+  if (!info.churches.length) return [h('h1', t('leader_title')), h('div.card', t('no_churches'))];
+
+  const loginForm = (message) => {
+    const sel = h('select', info.churches.map((c) => h('option', { value: c.id }, c.name)));
+    const pin = h('input', { type: 'password', autocomplete: 'off' });
+    const err = h('div.error', message || '');
+    return [h('h1', t('leader_title')), h('form.card', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        sessionStorage.setItem('leaderPin', pin.value);
+        sessionStorage.setItem('leaderChurch', sel.value);
+        try { await api('/api/leader/church', { body: { church_id: Number(sel.value) } }); route(); } catch {
+          sessionStorage.removeItem('leaderPin'); err.textContent = t('bad_pin');
+        }
+      },
+    }, h('p.muted', t('leader_intro')),
+      h('label.field', h('span', t('church')), sel),
+      h('label.field', h('span', t('leader_pin')), pin),
+      h('button.btn.block', { type: 'submit' }, t('login')), err)];
+  };
+  if (!isElder && !sessionStorage.getItem('leaderPin')) return loginForm();
+
+  let d;
+  try { d = await api('/api/leader/church', { body: { church_id: churchId } }); } catch (e) {
+    if (e.status === 401) { sessionStorage.removeItem('leaderPin'); return loginForm(t('bad_pin')); }
+    throw e;
+  }
+  const c = d.church;
+  const out = [h('h1', t('leader_title'))];
+
+  if (d.role === 'elder') {
+    const sel = h('select', { onchange: () => { sessionStorage.setItem('leaderChurch', sel.value); route(); } },
+      info.churches.map((x) => h('option', { value: x.id, selected: x.id === c.id }, x.name)));
+    out.push(h('div.card', h('p.small.muted', { style: 'margin-top:0' }, t('elder_note')), h('label.field', h('span', t('church')), sel)));
+  }
+
+  // Goals
+  const goalInputs = {};
+  const goalNote = h('span.saved');
+  out.push(h('form.card', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      const body = { church_id: c.id };
+      for (const [k, el] of Object.entries(goalInputs)) body[`goal_${k}`] = el.value;
+      await api('/api/leader/goals', { body });
+      goalNote.textContent = t('saved');
+    },
+  }, h('h2', icon('trophy'), `${t('goals')}: ${c.name}`),
+    h('div.grid3', METRICS.filter((m) => m.goal).map((m) => {
+      goalInputs[m.key] = h('input', { type: 'number', min: 0, value: c[`goal_${m.key}`] });
+      return h('label.field', h('span', t(m.key)), goalInputs[m.key]);
+    })),
+    h('div.actions', h('button.btn', { type: 'submit' }, t('save_goals')), goalNote),
+    METRICS.map((m) => progressRow(t(m.key), c[m.key], m.goal ? c[`goal_${m.key}`] : 0, m.key))));
+
+  // Enter counts for a member
+  const date = h('input', { type: 'date', value: d.campaign.today, max: d.campaign.today, min: d.campaign.start_date });
+  const vals = {};
+  const counterRows = METRICS.map((m) => {
+    vals[m.key] = 0;
+    const val = h('span.val', 0);
+    const bump = (n) => { vals[m.key] = Math.max(0, Math.min(50, vals[m.key] + n)); val.textContent = vals[m.key]; };
+    return h('div.counter',
+      h('div.label', icon(m.key, 30), h('div', h('b', t(m.key)))),
+      h('button.pxbtn', { type: 'button', 'aria-label': `${t(m.key)} −1`, onclick: () => bump(-1) }, '-'),
+      val,
+      h('button.pxbtn.plus', { type: 'button', 'aria-label': `${t(m.key)} +1`, onclick: () => bump(1) }, '+'));
+  });
+  const phraseBoxes = d.checklist.map((item, i) => {
+    const box = h('input', { type: 'checkbox' });
+    const num = h('span.num', i + 1);
+    const row = h('label.check', box, num, h('span.quote', pickText(item).split('\n').pop()));
+    box.addEventListener('change', () => {
+      row.classList.toggle('done', box.checked);
+      num.replaceChildren(box.checked ? icon('check', 22) : String(i + 1));
+    });
+    return { box, row };
+  });
+  const msg = h('div.error');
+  const ok = h('span.saved');
+  out.push(h('form.card', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      msg.textContent = ''; ok.textContent = '';
+      const practiced = phraseBoxes.filter((p) => p.box.checked).length;
+      try {
+        await api('/api/leader/entry', { body: { church_id: c.id, day: date.value, ...vals, practiced } });
+        ok.textContent = t('added');
+        setTimeout(route, 700);
+      } catch (err) { msg.textContent = err.message === 'empty' ? t('empty_entry') : err.message; }
+    },
+  }, h('h2', icon('heart'), t('for_member')),
+    h('p.small.muted', { style: 'margin-top:0' }, t('for_member_intro')),
+    h('label.field', h('span', t('date')), date),
+    counterRows,
+    h('details', { style: 'margin:10px 0' }, h('summary', `${t('phrases_practiced')}`), phraseBoxes.map((p) => p.row)),
+    h('div.actions', h('button.btn', { type: 'submit' }, t('add_entry')), ok), msg));
+
+  // Recent manual entries
+  out.push(h('div.card', h('h2', icon('book'), t('recent')),
+    d.entries.length ? d.entries.map((en) => h('div.story',
+      h('div', { style: 'flex:1' },
+        h('b', en.day), ' · ', h('span.small.muted', en.entered_by === 'elder' ? t('by_elder') : t('by_leader')),
+        h('div.small', METRICS.filter((m) => en[m.key]).map((m) => `${t(m.key)}: ${en[m.key]}`)
+          .concat(en.practiced ? [`${t('practiced')}: ${en.practiced}`] : []).join(' · '))),
+      h('button.btn.sm.danger', { type: 'button', onclick: async () => {
+        if (!confirm(t('remove_confirm'))) return;
+        await api('/api/leader/entry/delete', { body: { church_id: c.id, id: en.id } });
+        route();
+      } }, t('remove'))))
+      : h('p.muted', t('none_yet'))));
+
+  out.push(h('p.footer-links', h('a', { href: '#', onclick: (e) => {
+    e.preventDefault();
+    sessionStorage.removeItem('leaderPin'); sessionStorage.removeItem('leaderChurch');
+    if (d.role === 'elder') location.hash = '#/admin'; else route();
+  } }, t('log_out'))));
+  return out;
+}
+
 // ---------- Router ----------
-const VIEWS = { '': viewHome, board: viewBoard, stories: viewStories, admin: viewAdmin };
+const VIEWS = { '': viewHome, board: viewBoard, stories: viewStories, leader: viewLeader, admin: viewAdmin };
 async function route() {
   const name = location.hash.replace(/^#\/?/, '').split('/')[0];
   const view = VIEWS[name] || viewHome;

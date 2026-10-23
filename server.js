@@ -60,6 +60,15 @@ db.exec(`
     text_en TEXT NOT NULL DEFAULT '',
     text_es TEXT NOT NULL DEFAULT ''
   );
+  -- Counts a leader or the elder enters on behalf of members who can't use the app.
+  CREATE TABLE IF NOT EXISTS manual_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    church_id INTEGER NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    practiced INTEGER NOT NULL DEFAULT 0,
+    entered_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
   CREATE TABLE IF NOT EXISTS testimonies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     church_id INTEGER NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
@@ -69,12 +78,14 @@ db.exec(`
 `);
 
 // Add metric columns so new metrics appear on existing databases too.
-function addColumn(table, column) {
+function addColumn(table, column, type = 'INTEGER NOT NULL DEFAULT 0') {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
-  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 0`);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 for (const m of METRICS) addColumn('entries', m.key);
+for (const m of METRICS) addColumn('manual_entries', m.key);
 for (const m of GOAL_METRICS) addColumn('churches', `goal_${m.key}`);
+addColumn('churches', 'leader_pin', "TEXT NOT NULL DEFAULT ''");
 
 const DEFAULT_SETTINGS = {
   region_name: 'Our Region',
@@ -130,18 +141,26 @@ function streak(token) {
   return count;
 }
 
+// Member entries and leader/elder manual entries, combined.
+function allEntriesSql() {
+  const cols = METRICS.map((m) => m.key).join(', ');
+  return `SELECT church_id, day, ${cols}, 0 AS practiced FROM entries
+    UNION ALL SELECT church_id, day, ${cols}, practiced FROM manual_entries`;
+}
+
 function churchTotals() {
   const { start_date, end_date } = getSettings();
   const goals = GOAL_METRICS.map((m) => `c.goal_${m.key}`).join(', ');
   const sums = METRICS.map((m) => `COALESCE(t.${m.key}, 0) AS ${m.key}`).join(', ');
   return db.prepare(`
     SELECT c.id, c.name, ${goals}, ${sums},
-      (SELECT COUNT(*) FROM checklist_done d WHERE d.church_id = c.id AND d.day BETWEEN ? AND ?) AS practiced,
+      (SELECT COUNT(*) FROM checklist_done d WHERE d.church_id = c.id AND d.day BETWEEN ? AND ?)
+        + COALESCE(t.practiced, 0) AS practiced,
       (SELECT COUNT(*) FROM members m WHERE m.church_id = c.id) AS members
     FROM churches c
     LEFT JOIN (
-      SELECT church_id, ${METRICS.map((m) => `SUM(${m.key}) AS ${m.key}`).join(', ')}
-      FROM entries WHERE day BETWEEN ? AND ? GROUP BY church_id
+      SELECT church_id, ${METRICS.map((m) => `SUM(${m.key}) AS ${m.key}`).join(', ')}, SUM(practiced) AS practiced
+      FROM (${allEntriesSql()}) WHERE day BETWEEN ? AND ? GROUP BY church_id
     ) t ON t.church_id = c.id
     ORDER BY c.name
   `).all(start_date, end_date, start_date, end_date);
@@ -161,14 +180,14 @@ function dailySeries() {
   const zero = () => Object.fromEntries([...METRICS.map((m) => [m.key, 0]), ['practiced', 0]]);
   const byDay = {};
   const rows = db.prepare(`
-    SELECT day, ${METRICS.map((m) => `SUM(${m.key}) AS ${m.key}`).join(', ')}
-    FROM entries WHERE day BETWEEN ? AND ? GROUP BY day
+    SELECT day, ${METRICS.map((m) => `SUM(${m.key}) AS ${m.key}`).join(', ')}, SUM(practiced) AS practiced
+    FROM (${allEntriesSql()}) WHERE day BETWEEN ? AND ? GROUP BY day
   `).all(start_date, end_date);
   for (const { day, ...r } of rows) byDay[day] = { ...zero(), ...r };
   const practiced = db.prepare(`
     SELECT day, COUNT(*) AS n FROM checklist_done WHERE day BETWEEN ? AND ? GROUP BY day
   `).all(start_date, end_date);
-  for (const r of practiced) (byDay[r.day] ||= zero()).practiced = r.n;
+  for (const r of practiced) (byDay[r.day] ||= zero()).practiced += r.n;
   return byDay;
 }
 
@@ -209,6 +228,16 @@ function getMember(req) {
   const token = req.headers['x-member'];
   if (!token) return null;
   return db.prepare('SELECT token, church_id FROM members WHERE token = ?').get(String(token)) || null;
+}
+
+// The elder (admin PIN) may act for any church; a leader only for their own church.
+function leaderRole(req, churchId) {
+  const adminPin = req.headers['x-admin-pin'];
+  if (adminPin && safeEqual(adminPin, ADMIN_PIN)) return 'elder';
+  const pin = req.headers['x-leader-pin'];
+  const church = db.prepare('SELECT leader_pin FROM churches WHERE id = ?').get(Number(churchId));
+  if (pin && church && church.leader_pin && safeEqual(pin, church.leader_pin)) return 'leader';
+  return null;
 }
 
 const MIME = {
@@ -331,6 +360,60 @@ const routes = {
     return { ok: true };
   },
 
+  // Church leaders (and the elder, for any church)
+  'POST /api/leader/church': (req, body) => {
+    const id = Number(body.church_id);
+    const role = leaderRole(req, id);
+    if (!role) return [401, { error: 'bad_pin' }];
+    const church = churchTotals().find((c) => c.id === id);
+    if (!church) return [404, { error: 'no_church' }];
+    const entries = db.prepare(`
+      SELECT id, day, ${METRICS.map((m) => m.key).join(', ')}, practiced, entered_by, created_at
+      FROM manual_entries WHERE church_id = ? ORDER BY id DESC LIMIT 100
+    `).all(id);
+    return {
+      role,
+      church,
+      entries,
+      campaign: campaignInfo(),
+      checklist: db.prepare('SELECT id, text_en, text_es FROM checklist_items ORDER BY sort, id').all(),
+    };
+  },
+
+  'POST /api/leader/goals': (req, body) => {
+    const id = Number(body.church_id);
+    if (!leaderRole(req, id)) return [401, { error: 'bad_pin' }];
+    const goalCols = GOAL_METRICS.map((x) => `goal_${x.key}`);
+    const goals = goalCols.map((c) => Math.max(0, Math.floor(Number(body[c]) || 0)));
+    db.prepare(`UPDATE churches SET ${goalCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...goals, id);
+    return { ok: true };
+  },
+
+  'POST /api/leader/entry': (req, body) => {
+    const id = Number(body.church_id);
+    const role = leaderRole(req, id);
+    if (!role) return [401, { error: 'bad_pin' }];
+    const info = campaignInfo();
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : info.today;
+    if (day > info.today) return [400, { error: 'future_date' }];
+    const keys = METRICS.map((m) => m.key);
+    const values = keys.map((k) => clampCount(body[k]));
+    const practiced = Math.max(0, Math.min(MAX_PER_DAY, Math.floor(Number(body.practiced) || 0)));
+    if (values.every((v) => v === 0) && practiced === 0) return [400, { error: 'empty' }];
+    db.prepare(`
+      INSERT INTO manual_entries (church_id, day, ${keys.join(', ')}, practiced, entered_by)
+      VALUES (?, ?, ${keys.map(() => '?').join(', ')}, ?, ?)
+    `).run(id, day, ...values, practiced, role);
+    return { ok: true };
+  },
+
+  'POST /api/leader/entry/delete': (req, body) => {
+    const id = Number(body.church_id);
+    if (!leaderRole(req, id)) return [401, { error: 'bad_pin' }];
+    db.prepare('DELETE FROM manual_entries WHERE id = ? AND church_id = ?').run(Number(body.id), id);
+    return { ok: true };
+  },
+
   // Admin
   'POST /api/admin/login': () => ({ ok: true }),
 
@@ -361,15 +444,16 @@ const routes = {
   'POST /api/admin/church': (req, body) => {
     const name = cleanText(body.name, 100);
     const code = cleanText(body.join_code, 50);
+    const leaderPin = cleanText(body.leader_pin, 50);
     if (!name || !code) return [400, { error: 'name_and_code_required' }];
     const goalCols = GOAL_METRICS.map((x) => `goal_${x.key}`);
     const goals = goalCols.map((c) => Math.max(0, Math.floor(Number(body[c]) || 0)));
     if (body.id) {
-      db.prepare(`UPDATE churches SET name = ?, join_code = ?, ${goalCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
-        .run(name, code, ...goals, Number(body.id));
+      db.prepare(`UPDATE churches SET name = ?, join_code = ?, leader_pin = ?, ${goalCols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)
+        .run(name, code, leaderPin, ...goals, Number(body.id));
     } else {
-      db.prepare(`INSERT INTO churches (name, join_code, ${goalCols.join(', ')}) VALUES (?, ?, ${goalCols.map(() => '?').join(', ')})`)
-        .run(name, code, ...goals);
+      db.prepare(`INSERT INTO churches (name, join_code, leader_pin, ${goalCols.join(', ')}) VALUES (?, ?, ?, ${goalCols.map(() => '?').join(', ')})`)
+        .run(name, code, leaderPin, ...goals);
     }
     return { ok: true };
   },
@@ -414,7 +498,7 @@ const routes = {
 
   'POST /api/admin/reset-activity': (req, body) => {
     if (body.confirm !== 'RESET') return [400, { error: 'confirm_required' }];
-    db.exec('DELETE FROM entries; DELETE FROM checklist_done; DELETE FROM testimonies;');
+    db.exec('DELETE FROM entries; DELETE FROM manual_entries; DELETE FROM checklist_done; DELETE FROM testimonies;');
     return { ok: true };
   },
 };

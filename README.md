@@ -8,7 +8,7 @@ Members use it on their phones (no names collected, only counts):
 | Tracked | Goal per church? |
 |---|---|
 | 🏠 Visits to members | ✅ |
-| ⛪ Members who returned to church | ✅ |
+| ⛪ Members who came back to church (each person once) | ✅ |
 | 🙏 Prayers for members | — (counted only) |
 | ✉️ Letters sent to Mother | ✅ |
 | 📖 The 9 "Words of Mother's Love" checklist, ticked daily | streaks |
@@ -20,7 +20,10 @@ Everyone sees their church's progress and the whole region's progress. There's a
 - **Church leaderboard** ranked by % of goal, and a daily activity chart
 - **Stories**: short, anonymous testimonies
 - **Celebrations**: confetti when a church or the region reaches 25 / 50 / 75 / 100 % of a goal
-- **Admin page**: churches, join codes, goals, checklist, words of the day, CSV export
+- **Leaders page**: each church leader (with their own leader PIN) and the Elder can edit
+  the church's goals and **enter counts for members who can't update on their own**.
+  Those entries are added to the totals and can be removed if entered by mistake.
+- **Admin page** (the Elder): churches, join codes, leader PINs, goals, checklist, words of the day, CSV export
 
 It's one Docker container with a built-in SQLite database. It has no external services
 and no npm dependencies.
@@ -90,12 +93,15 @@ asking every member to install a VPN app is a big hurdle.
 1. Open the app → **Admin** link at the bottom of the Home page (or go to `/#/admin`).
 2. Enter your `ADMIN_PIN`.
 3. **Settings:** region name; dates are prefilled as 2026-11-01 → 2026-12-10.
-4. **Churches & goals:** add each church with a **join code** (e.g. `BRONX40`) and the
-   goals the elder assigns (visits, returned, letters). The region goal is the sum.
+4. **Churches & goals:** add each church with a member **join code** (e.g. `BRONX40`), a
+   **leader PIN** for that church's leaders, and the goals the Elder assigns (visits,
+   returned, letters). The region goal is the sum of the church goals.
 5. **Checklist:** the 9 phrases from the poster are preloaded in EN/ES. Put the description
    on the first line and the phrase on the second.
 6. **Word of the day** (optional): fill in days 1–40.
-7. Share the link plus each church's join code with its members. They tap
+7. Give each church's leaders their leader PIN. They open **Leaders** at the bottom of the
+   Home page. The Elder can open the Leaders page from Admin → Tools and switch between churches.
+8. Share the link plus each church's join code with its members. They tap
    **Share → Add to Home Screen** so it opens like an app.
 
 Testing before Nov 1? Set the start date earlier, try it out, then use
