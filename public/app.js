@@ -150,8 +150,8 @@ async function api(path, opts = {}) {
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) { const err = new Error(data.error || 'error'); err.status = res.status; throw err; }
+  const data = await res.json().catch(() => null);
+  if (!res.ok || data === null) { const err = new Error((data && data.error) || 'error'); err.status = res.status; throw err; }
   return data;
 }
 
@@ -248,7 +248,7 @@ const rankIcon = (k) => (k === 'practiced' ? 'book' : k);
 
 // ---------- Extra text: badges, levels, sides, feed ----------
 Object.assign(I18N.en, {
-  save: 'Save', sisters: 'Sisters', brothers: 'Brothers', all_sides: 'All', side: 'Side', side_required: 'Choose Brothers or Sisters.',
+  save: 'Save', bad_date: 'That date is outside the 40 days.', save_failed: 'Not saved. Check your connection.', sisters: 'Sisters', brothers: 'Brothers', all_sides: 'All', side: 'Side', side_required: 'Choose Brothers or Sisters.',
   team_size: 'People on the team', team_size_hint: 'Used to compare teams fairly (results per member).',
   total: 'Total', per_member: 'Per member', per_member_short: (v) => `${v} / member`, set_size: 'Set team size to rank per member',
   team_settings: 'Team settings', badges: 'Badges', my_badges: 'My badges', team_badges: 'Team badges',
@@ -284,7 +284,7 @@ Object.assign(I18N.en, {
   badges_how: 'You earn your own badges: practice Mother’s words every day (especially today’s focus phrase), share stories, cheer others in Activity, share the results — and when your team grows, you grow with it.',
 });
 Object.assign(I18N.es, {
-  save: 'Guardar', sisters: 'Hermanas', brothers: 'Hermanos', all_sides: 'Todos', side: 'Lado', side_required: 'Elige Hermanos o Hermanas.',
+  save: 'Guardar', bad_date: 'Esa fecha está fuera de los 40 días.', save_failed: 'No se guardó. Revisa tu conexión.', sisters: 'Hermanas', brothers: 'Hermanos', all_sides: 'Todos', side: 'Lado', side_required: 'Elige Hermanos o Hermanas.',
   team_size: 'Personas en el equipo', team_size_hint: 'Sirve para comparar equipos de forma justa (resultados por miembro).',
   total: 'Total', per_member: 'Por miembro', per_member_short: (v) => `${v} / miembro`, set_size: 'Indica el tamaño del equipo para clasificar por miembro',
   team_settings: 'Ajustes del equipo', badges: 'Insignias', my_badges: 'Mis insignias', team_badges: 'Insignias del equipo',
@@ -1047,13 +1047,16 @@ async function viewTeam() {
     clearTimeout(timer);
     note.textContent = '';
     timer = setTimeout(async () => {
-      const r = await api('/api/team/report', { body: { day: d.day, ...vals } });
+      let r;
+      try { r = await api('/api/team/report', { body: { day: d.day, ...vals } }); }
+      catch (e) { note.textContent = ''; note.append(h('span.error', t(e.message === 'bad_date' ? 'bad_date' : 'save_failed'))); return; }
       note.textContent = t('saved');
       if (r.level_up) celebrate(t('level_up_toast', r.level));
       else if (r.new_badges.length) celebrate(t('new_badge_toast', r.new_badges.length));
     }, 600);
   };
-  const date = h('input', { type: 'date', value: d.day, max: d.campaign.today, min: d.campaign.start_date,
+  const lastDay = d.campaign.today < d.campaign.end_date ? d.campaign.today : d.campaign.end_date;
+  const date = h('input', { type: 'date', value: d.day, max: lastDay, min: d.campaign.start_date,
     onchange: () => { location.hash = `#/team?day=${date.value}`; } });
   const rows = METRICS.map((m) => {
     const val = h('span.val', vals[m.key]);
@@ -1308,7 +1311,8 @@ async function viewLeader() {
     METRICS.map((m) => progressRow(t(m.key), c[m.key], m.goal ? c[`goal_${m.key}`] : 0, m.key))));
 
   // Enter counts for a member
-  const date = h('input', { type: 'date', value: d.campaign.today, max: d.campaign.today, min: d.campaign.start_date });
+  const lastDay = d.campaign.today < d.campaign.end_date ? d.campaign.today : d.campaign.end_date;
+  const date = h('input', { type: 'date', value: lastDay, max: lastDay, min: d.campaign.start_date });
   const entryTeam = h('select', h('option', { value: '' }, t('church_wide')), d.teams.map((tm) => h('option', { value: tm.id }, tm.name)));
   const vals = {};
   const counterRows = METRICS.map((m) => {

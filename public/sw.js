@@ -1,5 +1,5 @@
 // Network-first service worker: always fresh when online, still opens offline / on a weak signal.
-const CACHE = 'mwm-v1';
+const CACHE = 'mwm-v2';
 const SHELL = ['/', '/app.js', '/pixel.js', '/styles.css', '/icon.svg', '/icon-192.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -15,7 +15,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== location.origin) return;
+  // Only the app itself is cached. Data (/api) always comes from the network: it can be
+  // private to the signed-in person, and an offline error is better than stale or wrong data.
+  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
   e.respondWith(
     fetch(req)
       .then((res) => {
@@ -25,6 +27,6 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(req).then((hit) => hit || caches.match('/')))
+      .catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('/') : Response.error())))
   );
 });

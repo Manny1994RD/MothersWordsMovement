@@ -117,7 +117,9 @@ db.exec(`
 // Add metric columns so new metrics appear on existing databases too.
 function addColumn(table, column, type = 'INTEGER NOT NULL DEFAULT 0') {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
-  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  if (cols.includes(column)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  return true;
 }
 for (const m of METRICS) addColumn('entries', m.key);
 for (const m of METRICS) addColumn('manual_entries', m.key);
@@ -131,6 +133,11 @@ addColumn('testimonies', 'member', 'TEXT');
 addColumn('members', 'shares', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('members', 'nickname', 'TEXT');
 addColumn('members', 'pin_hash', 'TEXT');
+// Each checklist tick counts for the team the member was on that day, so switching teams
+// later doesn't move past practice (and past weekly results) to the new team.
+if (addColumn('checklist_done', 'team_id', 'INTEGER')) {
+  db.exec('UPDATE checklist_done SET team_id = (SELECT team_id FROM members WHERE token = checklist_done.member)');
+}
 for (const m of GOAL_METRICS) addColumn('churches', `goal_${m.key}`);
 addColumn('churches', 'leader_pin', "TEXT NOT NULL DEFAULT ''");
 
@@ -234,8 +241,8 @@ function teamTotals(churchId, from, to) {
   const sums = METRICS.map((m) => `COALESCE(t.${m.key}, 0) AS ${m.key}`).join(', ');
   return db.prepare(`
     SELECT tm.id, tm.name, tm.church_id, tm.side, tm.size, c.name AS church, ${sums},
-      (SELECT COUNT(*) FROM checklist_done d JOIN members m ON m.token = d.member
-        WHERE m.team_id = tm.id AND d.day BETWEEN ? AND ?) + COALESCE(t.practiced, 0) AS practiced,
+      (SELECT COUNT(*) FROM checklist_done d WHERE d.team_id = tm.id AND d.day BETWEEN ? AND ?)
+        + COALESCE(t.practiced, 0) AS practiced,
       (SELECT COUNT(*) FROM members m WHERE m.team_id = tm.id) AS members,
       (SELECT MAX(day) FROM team_reports r WHERE r.team_id = tm.id) AS last_report
     FROM teams tm JOIN churches c ON c.id = tm.church_id
@@ -375,14 +382,23 @@ function send(res, status, body, headers = {}) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
+    const chunks = [];
+    let size = 0;
     req.on('data', (chunk) => {
-      data += chunk;
-      if (data.length > 100000) reject(new Error('too large'));
+      size += chunk.length;
+      if (size > 100000) {
+        reject(Object.assign(new Error('too large'), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
     });
     req.on('end', () => {
-      try { resolve(data ? JSON.parse(data) : {}); } catch { reject(new Error('bad json')); }
+      const data = Buffer.concat(chunks).toString('utf8');
+      try { resolve(data ? JSON.parse(data) : {}); } catch { reject(Object.assign(new Error('bad json'), { status: 400 })); }
     });
+    req.on('error', reject);
+    req.on('aborted', () => reject(Object.assign(new Error('aborted'), { status: 400 })));
   });
 }
 
@@ -393,6 +409,7 @@ function safeEqual(a, b) {
 }
 
 const clampCount = (n) => Math.max(0, Math.min(MAX_PER_DAY, Math.floor(Number(n) || 0)));
+const clampSize = (n) => Math.max(0, Math.min(500, Math.floor(Number(n) || 0)));
 const cleanText = (s, max) => String(s ?? '').trim().slice(0, max);
 
 // ---------- Member nickname + PIN ----------
@@ -401,16 +418,21 @@ function hashPin(pin) {
   const salt = crypto.randomBytes(8).toString('hex');
   return `${salt}:${crypto.scryptSync(pin, salt, 32).toString('hex')}`;
 }
+const isHashed = (v) => /^[0-9a-f]{16}:[0-9a-f]{64}$/.test(v || '');
 function checkPin(pin, stored) {
   if (!stored) return false;
   const [salt, hash] = stored.split(':');
   return safeEqual(crypto.scryptSync(String(pin), salt, 32).toString('hex'), hash);
 }
-// A 4-digit PIN is easy to guess, so lock a nickname for 15 minutes after 5 wrong tries.
+// Team PINs from before hashing: hash them once at startup.
+for (const tm of db.prepare('SELECT id, pin FROM teams').all()) {
+  if (!isHashed(tm.pin)) db.prepare('UPDATE teams SET pin = ? WHERE id = ?').run(hashPin(tm.pin), tm.id);
+}
+// Short PINs are easy to guess, so lock after repeated wrong tries (15 minutes).
 const failures = new Map();
-function locked(key) {
+function locked(key, max = 5) {
   const f = failures.get(key);
-  return f && f.count >= 5 && Date.now() - f.at < 15 * 60 * 1000;
+  return !!f && f.count >= max && Date.now() - f.at < 15 * 60 * 1000;
 }
 function recordFailure(key) {
   const f = failures.get(key);
@@ -439,20 +461,32 @@ function getTeam(req) {
   return db.prepare('SELECT id, church_id, name, token FROM teams WHERE token = ?').get(String(token)) || null;
 }
 
+// A report day must be inside the campaign and not in the future.
 const validDay = (day, info) =>
-  /^\d{4}-\d{2}-\d{2}$/.test(day || '') && day >= info.start_date && day <= info.today ? day : null;
+  /^\d{4}-\d{2}-\d{2}$/.test(day || '') && day >= info.start_date && day <= info.today && day <= info.end_date ? day : null;
 
 // Roles: the admin (ADMIN_PIN) and the elder/overseer (overseer PIN) may act for any church;
 // a church leader only for their own church.
 function leaderRole(req, churchId) {
   const adminPin = req.headers['x-admin-pin'];
-  if (adminPin && safeEqual(adminPin, ADMIN_PIN)) return 'admin';
+  if (adminPin && adminPinOk(adminPin)) return 'admin';
   const pin = req.headers['x-leader-pin'];
+  if (!pin) return null;
+  const key = `leader:${Number(churchId)}`;
+  if (locked(key, 10)) return null;
   const overseer = getSettings().overseer_pin;
-  if (pin && overseer && safeEqual(pin, overseer)) return 'elder';
+  if (overseer && safeEqual(pin, overseer)) return 'elder';
   const church = db.prepare('SELECT leader_pin FROM churches WHERE id = ?').get(Number(churchId));
-  if (pin && church && church.leader_pin && safeEqual(pin, church.leader_pin)) return 'leader';
+  if (church && church.leader_pin && safeEqual(pin, church.leader_pin)) return 'leader';
+  recordFailure(key);
   return null;
+}
+
+function adminPinOk(pin) {
+  if (locked('admin', 10)) return false;
+  if (safeEqual(pin, ADMIN_PIN)) return true;
+  recordFailure('admin');
+  return false;
 }
 
 const MIME = {
@@ -543,9 +577,9 @@ const routes = {
       return [409, { error: 'team_exists' }];
     }
     const token = crypto.randomBytes(24).toString('hex');
-    const size = Math.max(0, Math.min(500, Math.floor(Number(body.size) || 0)));
+    const size = clampSize(body.size);
     const { lastInsertRowid } = db.prepare('INSERT INTO teams (church_id, name, pin, token, side, size) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(church.id, name, pin, token, body.side, size);
+      .run(church.id, name, hashPin(pin), token, body.side, size);
     addEvent('team_joined', { church_id: church.id, team_id: Number(lastInsertRowid) });
     return { token };
   },
@@ -554,14 +588,20 @@ const routes = {
     const team = getTeam(req);
     if (!team) return [401, { error: 'no_team' }];
     if (!SIDES.includes(body.side)) return [400, { error: 'side_required' }];
-    const size = Math.max(0, Math.min(500, Math.floor(Number(body.size) || 0)));
+    const size = clampSize(body.size);
     db.prepare('UPDATE teams SET side = ?, size = ? WHERE id = ?').run(body.side, size, team.id);
     return { ok: true };
   },
 
   'POST /api/team/login': (req, body) => {
+    const key = `team:${Number(body.team_id)}`;
+    if (locked(key)) return [429, { error: 'too_many_tries' }];
     const team = db.prepare('SELECT token, pin FROM teams WHERE id = ?').get(Number(body.team_id));
-    if (!team || !safeEqual(cleanText(body.pin, 30), team.pin)) return [401, { error: 'bad_pin' }];
+    if (!team || !checkPin(cleanText(body.pin, 30), team.pin)) {
+      recordFailure(key);
+      return [401, { error: 'bad_pin' }];
+    }
+    failures.delete(key);
     return { token: team.token };
   },
 
@@ -626,8 +666,13 @@ const routes = {
     else db.prepare('DELETE FROM events WHERE ukey = ?').run(`report:${team.id}:${day}`);
     const after = earnedIds(team.id);
     const newBadges = [...after.ids].filter((id) => !before.ids.has(id));
-    if (newBadges.length) {
-      addEvent('badge', { church_id: team.church_id, team_id: team.id, data: { badges: newBadges } });
+    // Announce each badge only once, even if a corrected report drops and re-earns it.
+    const announced = new Set(db.prepare(`
+      SELECT j.value AS id FROM events e, json_each(e.data, '$.badges') j WHERE e.kind = 'badge' AND e.team_id = ?
+    `).all(team.id).map((r) => r.id));
+    const toAnnounce = newBadges.filter((id) => !announced.has(id));
+    if (toAnnounce.length) {
+      addEvent('badge', { church_id: team.church_id, team_id: team.id, data: { badges: toAnnounce } });
     }
     if (after.level > before.level) {
       addEvent('level', { ukey: `level:${team.id}:${after.level}`, church_id: team.church_id, team_id: team.id, data: { level: after.level } });
@@ -730,8 +775,8 @@ const routes = {
     const itemId = Number(body.item_id);
     if (!db.prepare('SELECT 1 FROM checklist_items WHERE id = ?').get(itemId)) return [404, { error: 'no_item' }];
     if (body.done) {
-      db.prepare('INSERT OR IGNORE INTO checklist_done (member, church_id, item_id, day) VALUES (?, ?, ?, ?)')
-        .run(m.token, m.church_id, itemId, today());
+      db.prepare('INSERT OR IGNORE INTO checklist_done (member, church_id, team_id, item_id, day) VALUES (?, ?, ?, ?, ?)')
+        .run(m.token, m.church_id, m.team_id, itemId, today());
     } else {
       db.prepare('DELETE FROM checklist_done WHERE member = ? AND item_id = ? AND day = ?').run(m.token, itemId, today());
     }
@@ -804,7 +849,7 @@ const routes = {
       : null;
     const keys = METRICS.map((m) => m.key);
     const values = keys.map((k) => clampCount(body[k]));
-    const practiced = Math.max(0, Math.min(MAX_PER_DAY, Math.floor(Number(body.practiced) || 0)));
+    const practiced = clampCount(body.practiced);
     if (values.every((v) => v === 0) && practiced === 0) return [400, { error: 'empty' }];
     db.prepare(`
       INSERT INTO manual_entries (church_id, team_id, day, ${keys.join(', ')}, practiced, entered_by)
@@ -825,7 +870,7 @@ const routes = {
     if (!leaderRole(req, id)) return [401, { error: 'bad_pin' }];
     const pin = cleanText(body.pin, 30);
     if (pin.length < 4) return [400, { error: 'pin_too_short' }];
-    db.prepare('UPDATE teams SET pin = ? WHERE id = ? AND church_id = ?').run(pin, Number(body.team_id), id);
+    db.prepare('UPDATE teams SET pin = ? WHERE id = ? AND church_id = ?').run(hashPin(pin), Number(body.team_id), id);
     return { ok: true };
   },
 
@@ -833,7 +878,7 @@ const routes = {
     const id = Number(body.church_id);
     if (!leaderRole(req, id)) return [401, { error: 'bad_pin' }];
     if (!SIDES.includes(body.side)) return [400, { error: 'side_required' }];
-    const size = Math.max(0, Math.min(500, Math.floor(Number(body.size) || 0)));
+    const size = clampSize(body.size);
     db.prepare('UPDATE teams SET side = ?, size = ? WHERE id = ? AND church_id = ?').run(body.side, size, Number(body.team_id), id);
     return { ok: true };
   },
@@ -966,7 +1011,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith('/api/admin/')) {
       const pin = req.headers['x-admin-pin'] || url.searchParams.get('pin');
-      if (!pin || !safeEqual(pin, ADMIN_PIN)) return send(res, 401, { error: 'bad_pin' });
+      if (!pin || !adminPinOk(pin)) return send(res, 401, { error: 'bad_pin' });
       if (key === 'GET /api/admin/export.csv') return exportCsv(res);
     }
     const handler = routes[key];
@@ -979,6 +1024,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     serveStatic(req, res, url.pathname);
   } catch (err) {
+    if (err.status) return res.destroyed ? undefined : send(res, err.status, { error: err.message.replace(' ', '_') });
     console.error(err);
     send(res, 500, { error: 'server_error' });
   }
