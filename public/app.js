@@ -3,7 +3,7 @@
 
 const I18N = {
   en: {
-    nav_home: 'Home', nav_board: 'Region', nav_stories: 'Stories', tagline: "40 Days of Mother's Love",
+    nav_home: 'Home', nav_board: 'Region', nav_stories: 'Activity', tagline: "40 Days of Mother's Love",
     hero_kicker: 'Beginning of Peace', hero_a: 'The Words of', hero_b: "Mother's Love",
     welcome: 'Welcome!', join_intro: 'Choose your church and enter the code your leader gave you. No names are collected — only counts.',
     church: 'Church', code: 'Church code', join: 'Join', bad_code: 'That code is not correct for this church.',
@@ -49,7 +49,7 @@ const I18N = {
     for_team: 'Team (optional)', church_wide: '— Whole church —', reported_by_teams: 'Results are reported by team leaders.',
   },
   es: {
-    nav_home: 'Inicio', nav_board: 'Región', nav_stories: 'Historias', tagline: '40 días del amor de la Madre',
+    nav_home: 'Inicio', nav_board: 'Región', nav_stories: 'Actividad', tagline: '40 días del amor de la Madre',
     hero_kicker: 'Inicio de la Paz', hero_a: 'Palabras de Amor de la', hero_b: 'Madre',
     welcome: '¡Bienvenido!', join_intro: 'Elige tu iglesia e ingresa el código que te dio tu líder. No se piden nombres — solo números.',
     church: 'Iglesia', code: 'Código de la iglesia', join: 'Entrar', bad_code: 'Ese código no es correcto para esta iglesia.',
@@ -185,17 +185,22 @@ function dayBanner(c) {
 // ---------- Milestones & confetti ----------
 function checkMilestones(key, label, totals) {
   const goals = METRICS.filter((m) => m.goal && totals[`goal_${m.key}`] > 0);
+  const firstVisit = !store.get('seen:' + key);
   for (const m of goals) {
     const p = pct(totals[m.key], totals[`goal_${m.key}`]);
     const reached = [25, 50, 75, 100].filter((x) => p >= x).pop();
     if (!reached) continue;
     const storeKey = `ms:${key}:${m.key}`;
+    // On a device's first visit, remember milestones already reached instead of celebrating old news.
+    if (store.get(storeKey) == null && !store.get('seen:' + key)) { store.set(storeKey, reached); continue; }
     if (Number(store.get(storeKey) || 0) < reached) {
       store.set(storeKey, reached);
       celebrate(`${t('milestone', reached, label)} (${t(m.key)})`);
+      store.set('seen:' + key, '1');
       return;
     }
   }
+  if (firstVisit) store.set('seen:' + key, '1');
 }
 
 function celebrate(message) {
@@ -233,34 +238,294 @@ async function teamSelect(churchId, selected, emptyLabel) {
   return { sel, teams };
 }
 
-// Ranked list of teams for one metric.
-function teamRanking(teams, key, showChurch) {
-  const sorted = [...teams].sort((a, b) => b[key] - a[key] || a.name.localeCompare(b.name));
-  if (!sorted.length) return h('p.muted', t('no_teams'));
-  const max = Math.max(1, sorted[0][key]);
-  return h('div', sorted.map((x, i) => h('div.rank',
-    h('div.pos', i === 0 && x[key] > 0 ? icon('trophy', 26) : i + 1),
-    h('div.body',
-      h('div.row-between', h('span.name', x.name), h('span.num', x[key])),
-      showChurch ? h('div.small.muted', x.church) : null,
-      h('div.bar.thin', h('div', { style: `width:${Math.round((x[key] / max) * 100)}%` }))))));
-}
-
 const RANK_KEYS = [...METRICS.map((m) => m.key), 'practiced'];
 const rankLabel = (k) => (k === 'practiced' ? t('practiced') : t(k));
 const rankIcon = (k) => (k === 'practiced' ? 'book' : k);
 
-function rankCard(title, iconName, teams, showChurch, state) {
-  const seg = h('div.seg');
-  const list = h('div');
+// ---------- Extra text: badges, levels, sides, feed ----------
+Object.assign(I18N.en, {
+  save: 'Save', sisters: 'Sisters', brothers: 'Brothers', all_sides: 'All', side: 'Side', side_required: 'Choose Brothers or Sisters.',
+  team_size: 'People on the team', team_size_hint: 'Used to compare teams fairly (results per member).',
+  total: 'Total', per_member: 'Per member', per_member_short: (v) => `${v} / member`, set_size: 'Set team size to rank per member',
+  team_settings: 'Team settings', badges: 'Badges', my_badges: 'My badges', team_badges: 'Team badges',
+  earned_of: (a, b) => `${a} of ${b} earned`, locked: 'Locked', show_all: 'Show all', earned_only: 'Earned only',
+  level: (n) => `Level ${n}`, level_next: (a, b) => `${a} / ${b} badges to the next level`, level_max: 'Highest level!',
+  lv1: 'Seed', lv2: 'Sprout', lv3: 'Bud', lv4: 'Flower', lv5: 'Daisy', lv6: 'Bouquet',
+  tier_bronze: 'Bronze', tier_silver: 'Silver', tier_gold: 'Gold', tier_diamond: 'Diamond', tier_legend: 'Legend',
+  awards_note: 'Awards compare results per member, Sisters with Sisters and Brothers with Brothers.',
+  weekly: (n) => `Week ${n} challenge`, weekly_focus: (m) => `${m}: the highest average per member this week wins`, past_winners: 'Past weekly champions',
+  garden: 'Region garden', garden_intro: 'Every member who comes back plants a daisy.', garden_empty: 'The garden is waiting for its first daisy…',
+  focus_today: "Today's focus phrase", nav_feed: 'Activity', feed_title: 'Activity', feed_empty: 'No activity yet.',
+  ev_report: (team) => `${team} reported`, ev_badge: (team) => `${team} earned new badges!`, ev_level: (team, n, name) => `${team} grew to Level ${n} · ${name}!`,
+  ev_team: (team, side) => `New team: ${team}${side ? ` (${side})` : ''}`, ev_story: 'Story of grace',
+  ago_now: 'just now', ago_min: (n) => `${n} min ago`, ago_h: (n) => `${n} h ago`, ago_d: (n) => `${n} d ago`,
+  share: 'Share', share_region: 'Share today’s results', share_team: 'Share our team’s day',
+  tv: 'TV mode', recap: 'Final results', certificate: 'Certificate', print: 'Print', cert_title: 'Certificate of Recognition',
+  cert_body: (team, church) => `presented to team ${team} of ${church}`, cert_for: 'for', not_reported: 'Not reported today',
+  new_badge_toast: (n) => `🏅 ${n} new badge${n === 1 ? '' : 's'}!`, level_up_toast: (n) => `🌼 Level up! Level ${n}`,
+  recap_intro: 'Results so far. After the last day these are the final awards.',
+});
+Object.assign(I18N.es, {
+  save: 'Guardar', sisters: 'Hermanas', brothers: 'Hermanos', all_sides: 'Todos', side: 'Lado', side_required: 'Elige Hermanos o Hermanas.',
+  team_size: 'Personas en el equipo', team_size_hint: 'Sirve para comparar equipos de forma justa (resultados por miembro).',
+  total: 'Total', per_member: 'Por miembro', per_member_short: (v) => `${v} / miembro`, set_size: 'Indica el tamaño del equipo para clasificar por miembro',
+  team_settings: 'Ajustes del equipo', badges: 'Insignias', my_badges: 'Mis insignias', team_badges: 'Insignias del equipo',
+  earned_of: (a, b) => `${a} de ${b} ganadas`, locked: 'Bloqueada', show_all: 'Ver todas', earned_only: 'Solo ganadas',
+  level: (n) => `Nivel ${n}`, level_next: (a, b) => `${a} / ${b} insignias para el siguiente nivel`, level_max: '¡Nivel máximo!',
+  lv1: 'Semilla', lv2: 'Brote', lv3: 'Capullo', lv4: 'Flor', lv5: 'Margarita', lv6: 'Ramo',
+  tier_bronze: 'Bronce', tier_silver: 'Plata', tier_gold: 'Oro', tier_diamond: 'Diamante', tier_legend: 'Leyenda',
+  awards_note: 'Los premios comparan resultados por miembro: Hermanas con Hermanas y Hermanos con Hermanos.',
+  weekly: (n) => `Reto de la semana ${n}`, weekly_focus: (m) => `${m}: gana el promedio más alto por miembro esta semana`, past_winners: 'Campeones de semanas anteriores',
+  garden: 'Jardín de la región', garden_intro: 'Cada miembro que regresa planta una margarita.', garden_empty: 'El jardín espera su primera margarita…',
+  focus_today: 'Frase de enfoque de hoy', nav_feed: 'Actividad', feed_title: 'Actividad', feed_empty: 'Aún no hay actividad.',
+  ev_report: (team) => `${team} reportó`, ev_badge: (team) => `¡${team} ganó nuevas insignias!`, ev_level: (team, n, name) => `¡${team} creció al Nivel ${n} · ${name}!`,
+  ev_team: (team, side) => `Nuevo equipo: ${team}${side ? ` (${side})` : ''}`, ev_story: 'Historia de gracia',
+  ago_now: 'ahora', ago_min: (n) => `hace ${n} min`, ago_h: (n) => `hace ${n} h`, ago_d: (n) => `hace ${n} d`,
+  share: 'Compartir', share_region: 'Compartir resultados de hoy', share_team: 'Compartir el día del equipo',
+  tv: 'Modo TV', recap: 'Resultados finales', certificate: 'Certificado', print: 'Imprimir', cert_title: 'Certificado de Reconocimiento',
+  cert_body: (team, church) => `otorgado al equipo ${team} de ${church}`, cert_for: 'por', not_reported: 'No ha reportado hoy',
+  new_badge_toast: (n) => `🏅 ¡${n} insignia${n === 1 ? '' : 's'} nueva${n === 1 ? '' : 's'}!`, level_up_toast: (n) => `🌼 ¡Subió de nivel! Nivel ${n}`,
+  recap_intro: 'Resultados hasta ahora. Después del último día, estos son los premios finales.',
+});
+
+// name / description for each badge, in both languages. Tiered badges share a group name.
+const BADGE_TEXT = {
+  first_report: [['First Report', 'Report your team’s numbers for the first time'], ['Primer reporte', 'Reportar los números del equipo por primera vez']],
+  day_one: [['Day One', 'Report on the first day of the movement'], ['Día uno', 'Reportar el primer día del movimiento']],
+  full_house: [['Full House', 'Visits, returns, prayers and letters all in one day'], ['Casa llena', 'Visitas, regresos, oraciones y cartas en un mismo día']],
+  big_day: [['Big Day', '10 or more visits in one day'], ['Gran día', '10 o más visitas en un día']],
+  prayer_day: [['Prayer Warriors', '20 or more prayers in one day'], ['Guerreros de oración', '20 o más oraciones en un día']],
+  letter_day: [['Mail Day', '5 or more letters to Mother in one day'], ['Día de cartas', '5 o más cartas a la Madre en un día']],
+  roster: [['Full Roster', 'Everyone on the team joined the app'], ['Equipo completo', 'Todos en el equipo se unieron a la app']],
+  champion: [['Weekly Champion', 'Win a weekly challenge'], ['Campeón semanal', 'Ganar un reto semanal']],
+  champion3: [['Triple Champion', 'Win 3 weekly challenges'], ['Triple campeón', 'Ganar 3 retos semanales']],
+  visits: [['Visitor', (g) => `${g} visits`], ['Visitante', (g) => `${g} visitas`]],
+  returned: [['Homecoming', (g) => `${g} members came back`], ['Regreso a casa', (g) => `${g} miembros regresaron`]],
+  prayers: [['Prayer Chain', (g) => `${g} prayers for members`], ['Cadena de oración', (g) => `${g} oraciones por miembros`]],
+  letters: [['Letters of Love', (g) => `${g} letters to Mother`], ['Cartas de amor', (g) => `${g} cartas a la Madre`]],
+  practiced: [['Words in Action', (g) => `${g} phrases practiced by the team`], ['Palabras en acción', (g) => `${g} frases practicadas por el equipo`]],
+  report_streak: [['Faithful Reporter', (g) => `Report ${g} days in a row`], ['Reportero fiel', (g) => `Reportar ${g} días seguidos`]],
+  welcome: [['Welcome', 'Join the movement'], ['Bienvenida', 'Unirse al movimiento']],
+  first_phrase: [['First Words', 'Practice your first phrase'], ['Primeras palabras', 'Practicar tu primera frase']],
+  every_phrase: [['Complete Heart', 'Practice all 9 phrases at least once'], ['Corazón completo', 'Practicar las 9 frases al menos una vez']],
+  storyteller: [['Storyteller', 'Share a story of grace'], ['Narrador', 'Compartir una historia de gracia']],
+  supporter: [['Supporter', 'Cheer 10 times in the activity feed'], ['Animador', 'Animar 10 veces en la actividad']],
+  super_supporter: [['Super Supporter', 'Cheer 50 times in the activity feed'], ['Gran animador', 'Animar 50 veces en la actividad']],
+  streak: [['Daily Heart', (g) => `Practice ${g} days in a row`], ['Corazón diario', (g) => `Practicar ${g} días seguidos`]],
+  all9: [['Perfect Day', (g) => `All 9 phrases in a day, ${g} time${g === 1 ? '' : 's'}`], ['Día perfecto', (g) => `Las 9 frases en un día, ${g} vez${g === 1 ? '' : 'es'}`]],
+  ticks: [['Words Collector', (g) => `${g} phrases practiced`], ['Coleccionista de palabras', (g) => `${g} frases practicadas`]],
+};
+const PHRASE_NAMES = [
+  ['Greeter', 'Saludador'], ['Grateful Heart', 'Corazón agradecido'], ['Comforter', 'Consolador'],
+  ['Forgiver', 'Perdonador'], ['Patient Soul', 'Alma paciente'], ['Good Listener', 'Buen oyente'],
+  ['Encourager', 'Alentador'], ['Helper', 'Ayudador'], ['Kind Words', 'Palabras amables'],
+];
+function badgeText(b) {
+  const li = lang === 'es' ? 1 : 0;
+  if (b.phrase) {
+    const name = (PHRASE_NAMES[b.phrase - 1] || [`Phrase ${b.phrase}`, `Frase ${b.phrase}`])[li];
+    return [name, lang === 'es' ? `Frase #${b.phrase} × 10 (${b.have}/10)` : `Phrase #${b.phrase} × 10 (${b.have}/10)`];
+  }
+  const [name, desc] = (BADGE_TEXT[b.group || b.id] || [[b.id, ''], [b.id, '']])[li];
+  return [name, typeof desc === 'function' ? desc(b.goal) : desc];
+}
+
+const LEVEL_ART = ['seed', 'sprout', 'bud', 'flower', 'daisy', 'bouquet'];
+function levelBox(team) {
+  const span = team.next ? team.next : team.earned;
+  return h('div.levelbox',
+    h('div.level-art', icon(LEVEL_ART[team.level - 1] || 'seed', 64)),
+    h('div', { style: 'flex:1;min-width:0' },
+      h('div.level-name', t('level', team.level), ' · ', t('lv' + team.level)),
+      h('div.bar.thin', h('div', { style: `width:${team.next ? Math.round((team.earned / span) * 100) : 100}%` })),
+      h('div.small.muted', team.next ? t('level_next', team.earned, team.next) : t('level_max'))));
+}
+
+function badgeGrid(badges, title, open) {
+  const earned = badges.filter((b) => b.earned).length;
+  let all = true;
+  const grid = h('div.badges');
+  const toggle = h('button.btn.sm.ghost', { type: 'button' });
   const draw = () => {
-    seg.replaceChildren(...RANK_KEYS.map((k) => h('button' + (k === state.key ? '.on' : ''), {
-      type: 'button', onclick: () => { state.key = k; draw(); },
-    }, icon(rankIcon(k), 18), rankLabel(k))));
-    list.replaceChildren(teamRanking(teams, state.key, showChurch));
+    toggle.textContent = all ? t('earned_only') : t('show_all');
+    const list = [...badges].sort((a, b) => b.earned - a.earned);
+    grid.replaceChildren(...list.filter((b) => all || b.earned).map((b) => {
+      const [name, desc] = badgeText(b);
+      return h('div.badge' + (b.earned ? '' : '.locked') + (b.tier ? '.' + b.tier : '.special'), { title: desc },
+        h('div.badge-icon', icon(b.icon, 30)),
+        h('div.badge-name', name),
+        b.tier ? h('div.badge-tier', t('tier_' + b.tier)) : null,
+        h('div.badge-desc', desc));
+    }));
   };
+  toggle.addEventListener('click', () => { all = !all; draw(); });
   draw();
-  return h('div.card', h('h2', icon(iconName), title), seg, list);
+  return h('details.card.badge-card', { open: open || null },
+    h('summary', h('h2', { style: 'margin:0' }, icon('trophy'), title, h('span.badge-count', `${earned}/${badges.length}`))),
+    h('p.small.muted', t('earned_of', earned, badges.length), ' ', toggle),
+    grid);
+}
+
+// ---------- Fair rankings ----------
+const perMember = (x, k) => (x.size > 0 ? x[k] / x.size : null);
+const fmt1 = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toString());
+
+function teamRanking(teams, state, showChurch) {
+  const k = state.key;
+  let list = teams.filter((x) => state.side === 'all' || x.side === state.side);
+  const val = (x) => (state.mode === 'per' ? perMember(x, k) : x[k]);
+  list = [...list].sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1) || a.name.localeCompare(b.name));
+  if (!list.length) return h('p.muted', t('no_teams'));
+  const max = Math.max(0.0001, ...list.map((x) => val(x) || 0));
+  return h('div', list.map((x, i) => {
+    const v = val(x);
+    return h('div.rank',
+      h('div.pos', i === 0 && v > 0 ? icon('trophy', 26) : i + 1),
+      h('div.body',
+        h('div.row-between', h('span.name', x.name, x.side ? h('span.side-tag.' + x.side, t(x.side)) : null),
+          h('span.num', state.mode === 'per' ? fmt1(v) : v)),
+        h('div.small.muted', [showChurch ? x.church : null, state.mode === 'per' ? (x.size ? `${t('total')}: ${x[k]} · ${x.size} 👥` : t('set_size')) : (x.size ? t('per_member_short', fmt1(perMember(x, k))) : null)].filter(Boolean).join(' · ')),
+        h('div.bar.thin', h('div', { style: `width:${Math.round(((v || 0) / max) * 100)}%` }))));
+  }));
+}
+
+function segButtons(options, current, onPick) {
+  return h('div.seg', options.map(([value, label, ic]) => h('button' + (value === current ? '.on' : ''), {
+    type: 'button', onclick: () => onPick(value),
+  }, ic ? icon(ic, 18) : null, label)));
+}
+
+function rankCard(title, iconName, teams, showChurch, state) {
+  const box = h('div');
+  const draw = () => box.replaceChildren(
+    segButtons([['all', t('all_sides')], ['sisters', t('sisters')], ['brothers', t('brothers')]], state.side, (v) => { state.side = v; draw(); }),
+    segButtons([['per', t('per_member')], ['total', t('total')]], state.mode, (v) => { state.mode = v; draw(); }),
+    segButtons(RANK_KEYS.map((k) => [k, rankLabel(k), rankIcon(k)]), state.key, (v) => { state.key = v; draw(); }),
+    teamRanking(teams, state, showChurch));
+  draw();
+  return h('div.card', h('h2', icon(iconName), title), box);
+}
+const newRank = () => ({ key: 'visits', side: 'all', mode: 'per' });
+
+// Awards: best per-member team on each side, per category.
+function awardWinners(teams, side) {
+  return RANK_KEYS.map((k) => {
+    const best = teams.filter((x) => x.side === side && x.size > 0 && x[k] > 0)
+      .sort((a, b) => perMember(b, k) - perMember(a, k))[0];
+    return { key: k, best };
+  });
+}
+
+function awardsCard(teams, state, withCerts) {
+  const box = h('div');
+  const draw = () => box.replaceChildren(
+    segButtons([['sisters', t('sisters')], ['brothers', t('brothers')]], state.side, (v) => { state.side = v; draw(); }),
+    h('div.awards', awardWinners(teams, state.side).map(({ key, best }) => h('div.award', icon(rankIcon(key), 30),
+      h('div', { style: 'flex:1;min-width:0' },
+        h('div.small.muted', t('award_' + key)),
+        best ? h('div', h('b', best.name), h('span.small.muted', ` · ${best.church}`),
+          h('div.small', t('per_member_short', fmt1(perMember(best, key))), ` · ${t('total')}: ${best[key]}`)) : h('div.muted', '—')),
+      withCerts && best ? h('a.btn.sm.ghost', { href: `#/cert?team=${best.id}&award=${key}` }, t('certificate')) : null))));
+  draw();
+  return h('div.card', h('h2', icon('star'), t('awards')), h('p.small.muted', { style: 'margin-top:0' }, t('awards_note')), box);
+}
+
+function weeklyCard(week, winners) {
+  if (!week) return null;
+  const k = week.metric;
+  const sideTop = (side) => week.teams.filter((x) => x.side === side && x.size > 0)
+    .sort((a, b) => perMember(b, k) - perMember(a, k)).slice(0, 3);
+  return h('div.card.weekly',
+    h('h2', icon(rankIcon(k)), t('weekly', week.week)),
+    h('p', { style: 'margin-top:0' }, h('b', t('weekly_focus', rankLabel(k))), h('span.small.muted', ` · ${week.from} → ${week.to}`)),
+    h('div.grid2', ['sisters', 'brothers'].map((side) => h('div',
+      h('div.side-head.' + side, t(side)),
+      sideTop(side).length ? sideTop(side).map((x, i) => h('div.row-between.small', h('span', `${i + 1}. ${x.name}`), h('span.num', fmt1(perMember(x, k)))))
+        : h('div.small.muted', '—')))),
+    winners.length ? h('details', { style: 'margin-top:10px' }, h('summary', t('past_winners')),
+      winners.map((w) => h('div.small', { style: 'padding:4px 0' }, h('b', t('weekly', w.week)), ` · ${rankLabel(w.metric)}: `,
+        ['sisters', 'brothers'].map((s) => w.winners[s] ? `${t(s)} → ${w.winners[s].name}` : null).filter(Boolean).join(' · ') || '—'))) : null);
+}
+
+function gardenCard(returned) {
+  const shown = Math.min(returned, 120);
+  return h('div.card.garden-card', h('h2', icon('daisy'), t('garden'), h('span.badge-count', returned)),
+    h('p.small.muted', { style: 'margin-top:0' }, t('garden_intro')),
+    h('div.garden', returned ? [
+      ...Array.from({ length: shown }, (_, i) => h('span.plant', { style: `animation-delay:${(i % 12) * 60}ms` }, icon('daisy', 22))),
+      returned > shown ? h('span.more', `+${returned - shown}`) : null,
+    ] : h('div.muted.small', t('garden_empty'))));
+}
+
+// ---------- Feed ----------
+function clientId() {
+  let id = store.get('cid');
+  if (!id) { id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); store.set('cid', id); }
+  return id;
+}
+function ago(ts) {
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(ts.replace(' ', 'T') + 'Z')) / 60000));
+  if (mins < 1) return t('ago_now');
+  if (mins < 60) return t('ago_min', mins);
+  if (mins < 1440) return t('ago_h', Math.round(mins / 60));
+  return t('ago_d', Math.round(mins / 1440));
+}
+function feedItem(e) {
+  let ic = 'heart';
+  let title;
+  let body = null;
+  if (e.kind === 'report') {
+    ic = 'chart'; title = t('ev_report', e.team);
+    body = h('div.feed-stats', METRICS.filter((m) => e.data[m.key]).map((m) => h('span', icon(m.key, 16), ` ${e.data[m.key]}`)));
+  } else if (e.kind === 'badge') {
+    ic = 'trophy'; title = t('ev_badge', e.team);
+    body = h('div.small', (e.data.badges || [e.data.badge]).map((id) => {
+      const [group, n] = id.match(/^(.*)_(\d)$/) ? [id.replace(/_\d$/, ''), Number(id.slice(-1))] : [id, 0];
+      const [name] = badgeText({ id, group, goal: 0 });
+      return `🏅 ${name}${n ? ` · ${t('tier_' + ['bronze', 'silver', 'gold', 'diamond', 'legend'][n - 1])}` : ''}`;
+    }).join('  '));
+  } else if (e.kind === 'level') {
+    ic = LEVEL_ART[e.data.level - 1] || 'daisy'; title = t('ev_level', e.team, e.data.level, t('lv' + e.data.level));
+  } else if (e.kind === 'team_joined') {
+    ic = 'people'; title = t('ev_team', e.team, e.side ? t(e.side) : '');
+  } else if (e.kind === 'story') {
+    ic = 'letters'; title = t('ev_story'); body = h('p', e.data.text);
+  }
+  const cheerBtn = (kind, ic2) => {
+    const on = e.mine.includes(kind);
+    const btn = h('button.cheer' + (on ? '.on' : ''), { type: 'button', 'aria-pressed': String(on) }, icon(ic2, 18), h('span', e[kind]));
+    btn.addEventListener('click', async () => {
+      const r = await api('/api/cheer', { body: { event_id: e.id, kind, client: clientId() } });
+      e[kind] += r.on ? 1 : -1;
+      e.mine = r.on ? [...e.mine, kind] : e.mine.filter((x) => x !== kind);
+      btn.classList.toggle('on', r.on);
+      btn.lastChild.textContent = e[kind];
+      if (r.on) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); }
+    });
+    return btn;
+  };
+  return h('div.feed-item',
+    h('div.feed-icon', icon(ic, 28)),
+    h('div', { style: 'flex:1;min-width:0' },
+      h('div.feed-title', title),
+      body,
+      h('div.feed-meta', h('span.small.muted', [e.church, ago(e.created_at)].filter(Boolean).join(' · ')),
+        h('span.cheers', cheerBtn('pray', 'prayers'), cheerBtn('love', 'heart')))));
+}
+
+// ---------- Sharing ----------
+async function shareText(text) {
+  const url = location.origin + '/';
+  if (navigator.share) {
+    try { await navigator.share({ text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`, '_blank', 'noopener');
+}
+function shareBtn(label, makeText) {
+  return h('button.btn.share-btn', { type: 'button', onclick: () => shareText(makeText()) }, icon('share', 20), label);
+}
+function statLine(x) {
+  return METRICS.map((m) => `${t(m.key)}: ${x[m.key]}`).join(' · ');
 }
 
 // ---------- Views ----------
@@ -302,7 +567,7 @@ async function viewJoin() {
     h('a.card.cta', { href: '#/team' }, icon('people', 30), h('span', t('team_leader_cta')))];
 }
 
-const homeRank = { key: 'visits' };
+const homeRank = newRank();
 async function viewHome() {
   if (!store.get('member')) return viewJoin();
   let me;
@@ -314,6 +579,13 @@ async function viewHome() {
 
   const out = [dayBanner(me.campaign)];
   if (me.word) out.push(h('div.card.word', h('h2', icon('star'), t('word_today')), h('p', pickText(me.word))));
+  // One of the 9 phrases is spotlighted each day.
+  const focusIdx = me.checklist.length ? (Math.max(1, me.campaign.day_number) - 1) % me.checklist.length : -1;
+  if (focusIdx >= 0) {
+    const lines = pickText(me.checklist[focusIdx]).split('\n');
+    out.push(h('div.card.focus-card', h('h2', icon('daisy'), t('focus_today'), h('span.focus-num', focusIdx + 1)),
+      h('p.focus-quote', lines[lines.length - 1]), lines.length > 1 ? h('p.small.muted', { style: 'margin:0' }, lines.slice(0, -1).join(' ')) : null));
+  }
 
   // Results are reported by team leaders; members see their team and church teams.
   const { sel: myTeam } = await teamSelect(me.church?.id, me.team_id, t('no_team'));
@@ -326,6 +598,7 @@ async function viewHome() {
   const mine = me.teams.find((x) => x.id === me.team_id);
   out.push(h('div.card', h('h2', icon('people'), t('my_team'), teamNote),
     h('label.field', myTeam),
+    mine ? levelBox(mine) : null,
     mine ? h('div.tiles.mini', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 24), h('div.n', mine[k]), h('div.l', rankLabel(k))))) : null,
     h('p.small.muted', { style: 'margin-bottom:0' }, t('reported_by_teams'), ' ', h('a', { href: '#/team' }, t('team_leader_cta')))));
 
@@ -342,19 +615,27 @@ async function viewHome() {
     setNum();
     const lines = pickText(item).split('\n');
     const quote = lines.length > 1 ? lines.pop() : '';
-    const row = h('label.check' + (done.has(item.id) ? '.done' : ''), box, num,
+    const row = h('label.check' + (done.has(item.id) ? '.done' : '') + (i === focusIdx ? '.focus' : ''), box, num,
       h('span', h('span.desc', lines.join(' ')), quote ? h('span.quote', quote) : null));
     box.addEventListener('change', async () => {
       row.classList.toggle('done', box.checked);
       setNum();
       const r = await api('/api/me/checklist', { body: { item_id: item.id, done: box.checked } });
       setStreak(r.streak);
+      const had = new Set(myBadges.filter((b) => b.earned).map((b) => b.id));
+      const fresh = r.badges.filter((b) => b.earned && !had.has(b.id));
+      myBadges = r.badges;
+      badgeBox.replaceChildren(badgeGrid(myBadges, t('my_badges'), badgeBox.firstChild?.open));
+      if (fresh.length) celebrate(`${t('new_badge_toast', fresh.length)} ${fresh.map((b) => badgeText(b)[0]).join(', ')}`);
       if (box.checked && me.checklist.every((it) => it.id === item.id || done.has(it.id))) celebrate('💯 9/9!');
       box.checked ? done.add(item.id) : done.delete(item.id);
     });
     return row;
   });
   out.push(h('div.card', h('h2', icon('book'), t('checklist')), checks, streakEl));
+  let myBadges = me.badges;
+  const badgeBox = h('div', badgeGrid(myBadges, t('my_badges')));
+  out.push(badgeBox);
 
   const progressCard = (iconName, title, totals) => h('div.card', h('h2', icon(iconName), title),
     METRICS.map((m) => progressRow(t(m.key), totals[m.key], m.goal ? totals[`goal_${m.key}`] : 0, m.key)));
@@ -374,7 +655,8 @@ async function viewHome() {
 }
 
 let boardMetric = 'returned';
-const boardRank = { key: 'visits' };
+const boardRank = newRank();
+const boardAwards = { side: 'sisters' };
 let chartMetric = 'visits';
 async function viewBoard() {
   const d = await api('/api/dashboard');
@@ -446,23 +728,26 @@ async function viewBoard() {
   drawChart();
 
   checkMilestones('region', t('the_region'), r);
-  // Awards: the leading team for each category.
-  const awards = h('div.card', h('h2', icon('star'), t('awards')),
-    d.teams.length ? h('div.awards', RANK_KEYS.map((k) => {
-      const best = [...d.teams].sort((a, b) => b[k] - a[k])[0];
-      return h('div.award', icon(rankIcon(k), 30), h('div',
-        h('div.small.muted', t('award_' + k)),
-        best && best[k] > 0 ? h('div', h('b', best.name), h('span.small.muted', ` · ${best.church}`), h('span.num', ` ${best[k]}`)) : h('div.muted', '—')));
-    })) : h('p.muted', t('no_teams')));
+  const share = shareBtn(t('share_region'), () => [
+    `🌼 ${d.campaign.region_name} · ${t('day_of', Math.max(1, Math.min(d.campaign.day_number, d.campaign.total_days)), d.campaign.total_days)}`,
+    statLine(r),
+    ...['sisters', 'brothers'].map((side) => {
+      const best = awardWinners(d.teams, side).find((a) => a.key === 'visits')?.best;
+      return best ? `🏆 ${t(side)}: ${best.name} (${t('per_member_short', fmt1(perMember(best, 'visits')))} ${t('visits').toLowerCase()})` : null;
+    }).filter(Boolean),
+  ].join('\n'));
 
-  return [dayBanner(d.campaign), tiles, awards, goalCard, rankCard(t('top_teams'), 'people', d.teams, true, boardRank),
+  return [dayBanner(d.campaign), h('div.share-row', share), gardenCard(r.returned), weeklyCard(d.week, d.winners),
+    awardsCard(d.teams, boardAwards), tiles, goalCard,
+    rankCard(t('top_teams'), 'people', d.teams, true, boardRank),
     h('div.card', h('h2', icon('trophy'), t('ranking')), seg, rankList),
-    h('div.card', h('h2', icon('chart'), t('per_day')), chartSeg, chartBox)];
+    h('div.card', h('h2', icon('chart'), t('per_day')), chartSeg, chartBox),
+    h('p.footer-links', h('a', { href: '#/tv' }, t('tv')), ' · ', h('a', { href: '#/recap' }, t('recap')))].filter(Boolean);
 }
 
 async function viewStories() {
-  const d = await api('/api/dashboard');
-  const out = [h('h1', t('stories_title'))];
+  const { feed } = await api(`/api/feed?client=${clientId()}`);
+  const out = [h('h1', t('feed_title'))];
   if (store.get('member')) {
     const ta = h('textarea', { maxlength: 500, placeholder: t('story_placeholder') });
     out.push(h('form.card', {
@@ -472,12 +757,10 @@ async function viewStories() {
         await api('/api/testimonies', { body: { text: ta.value } });
         route();
       },
-    }, h('p.muted.small', t('stories_intro')), ta, h('div', { style: 'margin-top:10px' }, h('button.btn', { type: 'submit' }, t('share')))));
+    }, h('h2', icon('letters'), t('stories_title')), h('p.muted.small', { style: 'margin-top:0' }, t('stories_intro')), ta,
+      h('div', { style: 'margin-top:10px' }, h('button.btn', { type: 'submit' }, t('share')))));
   }
-  out.push(h('div.card', d.testimonies.length
-    ? d.testimonies.map((s) => h('div.story', icon('heart', 22),
-      h('div', h('p', s.text), h('div.small.muted', `${s.church} · ${s.created_at.slice(0, 10)}`))))
-    : h('p.muted', t('no_stories'))));
+  out.push(h('div.card.feed', feed.length ? feed.map(feedItem) : h('p.muted', t('feed_empty'))));
   return out;
 }
 
@@ -578,6 +861,7 @@ async function viewAdmin() {
   // Export / reset
   const tools = h('div.card', h('h2', '🧰 Tools'),
     h('p', h('a.btn.ghost', { href: '#/leader' }, 'Open the Leaders page (enter counts / goals for any church)')),
+    h('p.actions', h('a.btn.ghost', { href: '#/tv' }, icon('tv', 20), 'TV / projector mode'), h('a.btn.ghost', { href: '#/recap' }, icon('trophy', 20), 'Final results & certificates')),
     h('div.actions',
       h('button.btn.ghost', { type: 'button', onclick: async () => {
         const res = await fetch('/api/admin/export.csv', { headers: { 'X-Admin-Pin': sessionStorage.getItem('adminPin') } });
@@ -595,6 +879,11 @@ async function viewAdmin() {
 }
 
 // ---------- Team leaders ----------
+function sideSelect(value) {
+  return h('select', h('option', { value: '' }, '—'),
+    ['sisters', 'brothers'].map((x) => h('option', { value: x, selected: x === value }, t(x))));
+}
+
 async function viewTeam() {
   if (!store.get('team')) return viewTeamJoin();
   const day = hashParams().get('day') || '';
@@ -614,8 +903,10 @@ async function viewTeam() {
     clearTimeout(timer);
     note.textContent = '';
     timer = setTimeout(async () => {
-      await api('/api/team/report', { body: { day: d.day, ...vals } });
+      const r = await api('/api/team/report', { body: { day: d.day, ...vals } });
       note.textContent = t('saved');
+      if (r.level_up) celebrate(t('level_up_toast', r.level));
+      else if (r.new_badges.length) celebrate(t('new_badge_toast', r.new_badges.length));
     }, 600);
   };
   const date = h('input', { type: 'date', value: d.day, max: d.campaign.today, min: d.campaign.start_date,
@@ -640,8 +931,30 @@ async function viewTeam() {
     rows));
 
   out.push(h('div.card', h('h2', icon('chart'), t('team_totals')),
-    h('div.tiles.mini', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 24), h('div.n', d.team[k]), h('div.l', rankLabel(k)))))));
+    levelBox(d.team),
+    h('div.tiles.mini', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 24), h('div.n', d.team[k]),
+      h('div.l', rankLabel(k)), d.team.size ? h('div.l', t('per_member_short', fmt1(perMember(d.team, k)))) : null))),
+    h('div.share-row', shareBtn(t('share_team'), () => [
+      `🌼 ${d.team.name} · ${d.church.name} · ${d.day}`,
+      statLine(vals),
+      `${t('level', d.team.level)} · ${t('lv' + d.team.level)} · 🏅 ${d.team.earned}`,
+    ].join('\n')))));
+  out.push(badgeGrid(d.team.badges, t('team_badges')));
   out.push(rankCard(t('church_teams'), 'trophy', d.teams, false, homeRank));
+
+  // Side and size (size makes per-member comparisons fair)
+  const side = sideSelect(d.team.side);
+  const size = h('input', { type: 'number', min: 0, max: 500, value: d.team.size || '' });
+  const sNote = h('span.saved');
+  const sErr = h('div.error');
+  out.push(h('form.card', { onsubmit: async (e) => {
+    e.preventDefault(); sErr.textContent = '';
+    try { await api('/api/team/settings', { body: { side: side.value, size: size.value } }); sNote.textContent = t('saved'); setTimeout(route, 600); }
+    catch (ex) { sErr.textContent = t(ex.message); }
+  } }, h('h2', icon('people'), t('team_settings'), sNote),
+    h('div.grid2', h('label.field', h('span', t('side')), side), h('label.field', h('span', t('team_size')), size)),
+    h('p.small.muted', { style: 'margin-top:0' }, t('team_size_hint')),
+    h('button.btn', { type: 'submit' }, t('save')), sErr));
   out.push(h('p.footer-links', h('a', { href: '#', onclick: (e) => {
     e.preventDefault(); store.del('team'); route();
   } }, t('log_out'))));
@@ -661,11 +974,13 @@ async function viewTeamJoin() {
   const code = h('input', { type: 'text', value: q.get('code') || '', autocomplete: 'off', autocapitalize: 'characters' });
   const name = h('input', { type: 'text', maxlength: 60 });
   const pin = h('input', { type: 'password', inputmode: 'numeric', autocomplete: 'new-password' });
+  const side = sideSelect('');
+  const size = h('input', { type: 'number', min: 1, max: 500 });
   const err1 = h('div.error');
   const createForm = h('form.card', { onsubmit: async (e) => {
     e.preventDefault(); err1.textContent = '';
     try {
-      const r = await api('/api/team/create', { body: { church_id: Number(church.value), code: code.value, name: name.value, pin: pin.value } });
+      const r = await api('/api/team/create', { body: { church_id: Number(church.value), code: code.value, name: name.value, pin: pin.value, side: side.value, size: size.value } });
       store.set('team', r.token);
       location.hash = '#/team';
       route();
@@ -675,6 +990,8 @@ async function viewTeamJoin() {
     h('label.field', h('span', t('church')), church),
     h('label.field', h('span', t('team_code')), code),
     h('label.field', h('span', t('team_name')), name),
+    h('div.grid2', h('label.field', h('span', t('side')), side), h('label.field', h('span', t('team_size')), size)),
+    h('p.small.muted', { style: 'margin-top:0' }, t('team_size_hint')),
     h('label.field', h('span', t('team_pin')), pin),
     h('button.btn.block', { type: 'submit' }, t('new_team')), err1);
 
@@ -762,9 +1079,18 @@ async function viewLeader() {
     } }, t('copy_link')), copyNote)));
   out.push(h('div.card', h('h2', icon('people'), `${t('teams_title')} (${d.teams.length})`),
     d.teams.length ? d.teams.map((tm) => h('div.story',
-      h('div', { style: 'flex:1' }, h('b', tm.name),
+      h('div', { style: 'flex:1' }, h('b', tm.name), tm.side ? h('span.side-tag.' + tm.side, t(tm.side)) : null,
         h('div.small', RANK_KEYS.map((k) => `${rankLabel(k)}: ${tm[k]}`).join(' · ')),
-        h('div.small.muted', tm.last_report ? t('last_report', tm.last_report) : '—')),
+        h('div.small.muted', `${t('level', tm.level)} · 🏅 ${tm.earned} · ${tm.size || '?'} 👥 · `,
+          tm.last_report ? t('last_report', tm.last_report) : '—'),
+        tm.last_report !== d.campaign.today && d.campaign.day_number >= 1 ? h('div.warn', '⚠ ' + t('not_reported')) : null,
+        (() => {
+          const sd = sideSelect(tm.side);
+          const sz = h('input', { type: 'number', min: 0, value: tm.size || '', style: 'max-width:90px' });
+          const save = async () => { try { await api('/api/leader/team/settings', { body: { church_id: c.id, team_id: tm.id, side: sd.value, size: sz.value } }); } catch (e) { alert(t(e.message)); } };
+          sd.addEventListener('change', save); sz.addEventListener('change', save);
+          return h('div.actions', { style: 'margin-top:6px' }, sd, sz);
+        })()),
       h('div.actions', { style: 'flex-direction:column;align-items:stretch' },
         h('button.btn.sm.ghost', { type: 'button', onclick: async () => {
           const pin = prompt(t('new_pin_prompt'));
@@ -864,8 +1190,84 @@ async function viewLeader() {
   return out;
 }
 
+// ---------- TV mode (projector at church) ----------
+let tvTimer = null;
+async function viewTv() {
+  const [d, f] = await Promise.all([api('/api/dashboard'), api(`/api/feed?client=${clientId()}`)]);
+  document.getElementById('region-name').textContent = d.campaign.region_name;
+  const r = d.region;
+  const topPer = (state) => h('div.card', h('h2', icon('trophy'), t('top_teams'), h('span.small.muted', ` · ${t('per_member')} · ${rankLabel(state.key)}`)),
+    teamRanking(d.teams, state, true));
+  const slides = [
+    () => [dayBanner(d.campaign), h('div.tiles.tv-tiles', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 40), h('div.n', r[k]), h('div.l', rankLabel(k))))), gardenCard(r.returned)],
+    () => [awardsCard(d.teams, { side: 'sisters' })],
+    () => [awardsCard(d.teams, { side: 'brothers' })],
+    () => [weeklyCard(d.week, d.winners) || gardenCard(r.returned)],
+    () => [topPer({ key: 'visits', side: 'all', mode: 'per' })],
+    () => [topPer({ key: 'returned', side: 'all', mode: 'per' })],
+    () => [h('div.card.feed', h('h2', icon('heart'), t('feed_title')), f.feed.slice(0, 6).map(feedItem))],
+  ];
+  let i = 0;
+  const stage = h('div.tv-stage');
+  const dots = h('div.tv-dots');
+  const show = () => {
+    stage.replaceChildren(...slides[i]().filter(Boolean));
+    stage.classList.remove('enter'); void stage.offsetWidth; stage.classList.add('enter');
+    dots.replaceChildren(...slides.map((_, j) => h('i' + (j === i ? '.on' : ''))));
+  };
+  show();
+  clearInterval(tvTimer);
+  tvTimer = setInterval(() => {
+    if (!location.hash.startsWith('#/tv')) return clearInterval(tvTimer);
+    i = (i + 1) % slides.length;
+    if (i === 0) route(); else show();   // refresh the data once per loop
+  }, 12000);
+  return [h('div.tv-head', h('img', { src: '/icon.svg', width: 40, height: 42, alt: '' }), h('b', d.campaign.region_name),
+    h('span', t('tagline')), h('a.tv-exit', { href: '#/board', 'aria-label': 'Exit' }, '✕')), stage, dots];
+}
+
+// ---------- Final results & certificates ----------
+const recapAwards = { side: 'sisters' };
+async function viewRecap() {
+  const d = await api('/api/dashboard');
+  document.getElementById('region-name').textContent = d.campaign.region_name;
+  const r = d.region;
+  const levels = [...d.teams].sort((a, b) => b.earned - a.earned).slice(0, 5);
+  return [h('h1', t('recap')), h('p.muted', t('recap_intro')),
+    awardsCard(d.teams, recapAwards, true),
+    h('div.tiles', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 30), h('div.n', r[k]), h('div.l', rankLabel(k))))),
+    gardenCard(r.returned),
+    h('div.card', h('h2', icon('bouquet'), t('badges')), levels.length ? levels.map((x) => h('div.story', icon(LEVEL_ART[x.level - 1], 36),
+      h('div', { style: 'flex:1' }, h('b', x.name), h('div.small.muted', `${x.church} · ${t('level', x.level)} · ${t('lv' + x.level)} · 🏅 ${x.earned}/${x.badge_total}`))))
+      : h('p.muted', t('no_teams'))),
+    d.winners.length ? weeklyCard({ ...d.winners[d.winners.length - 1], teams: [] }, d.winners) : null,
+  ].filter(Boolean);
+}
+
+async function viewCert() {
+  const q = hashParams();
+  const d = await api('/api/dashboard');
+  const team = d.teams.find((x) => x.id === Number(q.get('team')));
+  const key = q.get('award');
+  if (!team || !RANK_KEYS.includes(key)) return [h('div.card', '—')];
+  return [h('div.cert',
+    h('div.cert-inner',
+      h('div.cert-art', icon('daisy', 48), icon('trophy', 56), icon('daisy', 48)),
+      h('div.cert-kicker', d.campaign.region_name),
+      h('div.cert-title', t('cert_title')),
+      h('div.cert-body', t('cert_body', team.name, team.church)),
+      h('div.cert-for', t('cert_for')),
+      h('div.cert-award', t('award_' + key)),
+      h('div.cert-stats', `${t('per_member_short', fmt1(perMember(team, key)))} · ${t('total')}: ${team[key]} · ${t(team.side || 'all_sides')}`),
+      h('div.cert-foot', `${t('hero_a')} ${t('hero_b')} · ${d.campaign.start_date} → ${d.campaign.end_date}`))),
+    h('div.actions.no-print', { style: 'justify-content:center;margin-top:16px' },
+      h('button.btn', { type: 'button', onclick: () => print() }, t('print')),
+      h('a.btn.ghost', { href: '#/recap' }, '←'))];
+}
+
 // ---------- Router ----------
-const VIEWS = { '': viewHome, board: viewBoard, team: viewTeam, stories: viewStories, leader: viewLeader, admin: viewAdmin };
+const VIEWS = { '': viewHome, board: viewBoard, team: viewTeam, stories: viewStories, leader: viewLeader, admin: viewAdmin,
+  tv: viewTv, recap: viewRecap, cert: viewCert };
 async function route() {
   const name = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0];
   const view = VIEWS[name] || viewHome;
@@ -873,6 +1275,9 @@ async function route() {
   document.getElementById('lang-toggle').textContent = lang === 'en' ? 'ES' : 'EN';
   document.documentElement.lang = lang;
   document.querySelectorAll('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.tab === (name || 'home')));
+  document.body.classList.toggle('tv-mode', name === 'tv');
+  document.body.classList.toggle('cert-mode', name === 'cert');
+  if (name !== 'tv') clearInterval(tvTimer);
   try {
     const nodes = await view();
     app.replaceChildren(...nodes);
@@ -893,3 +1298,8 @@ addEventListener('hashchange', route);
 // Refresh the region board while it's open so it feels live.
 setInterval(() => { if (location.hash.startsWith('#/board') && !document.hidden) route(); }, 60000);
 route();
+
+// Offline support: cache the app so it opens fast on a weak signal.
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}

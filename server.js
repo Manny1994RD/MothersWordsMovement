@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { teamBadges, memberBadges, levelFor } = require('./badges');
 
 const PORT = Number(process.env.PORT || 8080);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -20,6 +21,9 @@ const METRICS = [
   { key: 'letters', goal: true },
 ];
 const GOAL_METRICS = METRICS.filter((m) => m.goal);
+const SIDES = ['sisters', 'brothers'];
+// Weekly challenge focus, one per week of the campaign (40 days = 6 weeks).
+const WEEKLY = ['visits', 'prayers', 'letters', 'returned', 'practiced', 'visits'];
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new DatabaseSync(path.join(DATA_DIR, 'movement.db'));
@@ -86,6 +90,22 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (team_id, day)
   );
+  -- Activity feed (team reports, badges, new teams, stories).
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ukey TEXT UNIQUE,
+    kind TEXT NOT NULL,
+    church_id INTEGER REFERENCES churches(id) ON DELETE CASCADE,
+    team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+    data TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS cheers (
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    client TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    PRIMARY KEY (event_id, client, kind)
+  );
   CREATE TABLE IF NOT EXISTS testimonies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     church_id INTEGER NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
@@ -105,6 +125,9 @@ for (const m of METRICS) addColumn('team_reports', m.key);
 addColumn('manual_entries', 'team_id', 'INTEGER REFERENCES teams(id) ON DELETE SET NULL');
 addColumn('members', 'team_id', 'INTEGER REFERENCES teams(id) ON DELETE SET NULL');
 addColumn('churches', 'team_code', "TEXT NOT NULL DEFAULT ''");
+addColumn('teams', 'side', "TEXT NOT NULL DEFAULT ''");
+addColumn('teams', 'size', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('testimonies', 'member', 'TEXT');
 for (const m of GOAL_METRICS) addColumn('churches', `goal_${m.key}`);
 addColumn('churches', 'leader_pin', "TEXT NOT NULL DEFAULT ''");
 
@@ -194,11 +217,13 @@ function churchTotals() {
   `).all(start_date, end_date, start_date, end_date);
 }
 
-function teamTotals(churchId) {
+function teamTotals(churchId, from, to) {
   const { start_date, end_date } = getSettings();
+  from ||= start_date;
+  to ||= end_date;
   const sums = METRICS.map((m) => `COALESCE(t.${m.key}, 0) AS ${m.key}`).join(', ');
   return db.prepare(`
-    SELECT tm.id, tm.name, tm.church_id, c.name AS church, ${sums},
+    SELECT tm.id, tm.name, tm.church_id, tm.side, tm.size, c.name AS church, ${sums},
       (SELECT COUNT(*) FROM checklist_done d JOIN members m ON m.token = d.member
         WHERE m.team_id = tm.id AND d.day BETWEEN ? AND ?) + COALESCE(t.practiced, 0) AS practiced,
       (SELECT COUNT(*) FROM members m WHERE m.team_id = tm.id) AS members,
@@ -210,7 +235,91 @@ function teamTotals(churchId) {
     ) t ON t.team_id = tm.id
     ${churchId ? 'WHERE tm.church_id = ?' : ''}
     ORDER BY c.name, tm.name
-  `).all(start_date, end_date, start_date, end_date, ...(churchId ? [churchId] : []));
+  `).all(from, to, from, to, ...(churchId ? [churchId] : []));
+}
+
+// ---------- Weekly challenge, badges, levels ----------
+function weeks() {
+  const info = campaignInfo();
+  const out = [];
+  for (let w = 0; w * 7 < info.total_days; w++) {
+    const from = addDays(info.start_date, w * 7);
+    const to = addDays(info.start_date, Math.min(w * 7 + 6, info.total_days - 1));
+    out.push({ week: w + 1, from, to, metric: WEEKLY[w % WEEKLY.length], done: to < info.today, current: from <= info.today && info.today <= to });
+  }
+  return out;
+}
+
+function addDays(day, n) {
+  const d = new Date(day + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+const perMember = (team, key) => (team.size > 0 ? team[key] / team.size : 0);
+
+// Winner per side for each finished week (highest per-member result in the week's focus).
+function weeklyWinners() {
+  return weeks().filter((w) => w.done).map((w) => {
+    const teams = teamTotals(null, w.from, w.to);
+    const winners = {};
+    for (const side of SIDES) {
+      const best = teams.filter((x) => x.side === side && x.size > 0 && x[w.metric] > 0)
+        .sort((a, b) => perMember(b, w.metric) - perMember(a, w.metric))[0];
+      if (best) winners[side] = { id: best.id, name: best.name, church: best.church, value: best[w.metric], per_member: perMember(best, w.metric) };
+    }
+    return { ...w, winners };
+  });
+}
+
+// Adds badges, level and per-member numbers to team rows.
+function withBadges(teams) {
+  const info = campaignInfo();
+  const champs = {};
+  for (const w of weeklyWinners()) for (const win of Object.values(w.winners)) champs[win.id] = (champs[win.id] || 0) + 1;
+  const reports = db.prepare(`SELECT team_id, day, ${METRICS.map((m) => m.key).join(', ')} FROM team_reports WHERE day BETWEEN ? AND ?`)
+    .all(info.start_date, info.end_date);
+  return teams.map((t) => {
+    const badges = teamBadges(t, reports.filter((r) => r.team_id === t.id), info, champs[t.id] || 0);
+    const earned = badges.filter((b) => b.earned).length;
+    return { ...t, badges, earned, badge_total: badges.length, ...levelFor(earned) };
+  });
+}
+
+function badgesForMember(m) {
+  const info = campaignInfo();
+  return memberBadges({
+    ticks: db.prepare('SELECT day, item_id FROM checklist_done WHERE member = ? AND day BETWEEN ? AND ?').all(m.token, info.start_date, info.end_date),
+    itemIds: db.prepare('SELECT id FROM checklist_items ORDER BY sort, id').all().map((r) => r.id),
+    stories: db.prepare('SELECT COUNT(*) AS n FROM testimonies WHERE member = ?').get(m.token).n,
+    cheers: db.prepare('SELECT COUNT(*) AS n FROM cheers WHERE client = ?').get(m.token).n,
+    joined: true,
+  });
+}
+
+// ---------- Activity feed ----------
+function addEvent(kind, { ukey = null, church_id = null, team_id = null, data = {} }) {
+  db.prepare(`
+    INSERT INTO events (ukey, kind, church_id, team_id, data) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (ukey) DO UPDATE SET data = excluded.data, created_at = datetime('now')
+  `).run(ukey, kind, church_id, team_id, JSON.stringify(data));
+}
+
+function feed(client, limit = 40) {
+  const rows = db.prepare(`
+    SELECT e.id, e.kind, e.data, e.created_at, tm.name AS team, tm.side, c.name AS church,
+      (SELECT COUNT(*) FROM cheers x WHERE x.event_id = e.id AND x.kind = 'pray') AS pray,
+      (SELECT COUNT(*) FROM cheers x WHERE x.event_id = e.id AND x.kind = 'love') AS love,
+      (SELECT group_concat(kind) FROM cheers x WHERE x.event_id = e.id AND x.client = ?) AS mine
+    FROM events e LEFT JOIN teams tm ON tm.id = e.team_id LEFT JOIN churches c ON c.id = e.church_id
+    ORDER BY e.created_at DESC, e.id DESC LIMIT ?
+  `).all(client || '', limit);
+  return rows.map((r) => ({ ...r, data: JSON.parse(r.data), mine: r.mine ? r.mine.split(',') : [] }));
+}
+
+function earnedIds(teamId) {
+  const t = withBadges(teamTotals().filter((x) => x.id === teamId))[0];
+  return t ? { ids: new Set(t.badges.filter((b) => b.earned).map((b) => b.id)), level: t.level } : { ids: new Set(), level: 1 };
 }
 
 function regionSummary() {
@@ -360,12 +469,25 @@ const routes = {
     const pin = cleanText(body.pin, 30);
     if (name.length < 2) return [400, { error: 'name_required' }];
     if (pin.length < 4) return [400, { error: 'pin_too_short' }];
+    if (!SIDES.includes(body.side)) return [400, { error: 'side_required' }];
     if (db.prepare('SELECT 1 FROM teams WHERE church_id = ? AND lower(name) = lower(?)').get(church.id, name)) {
       return [409, { error: 'team_exists' }];
     }
     const token = crypto.randomBytes(24).toString('hex');
-    db.prepare('INSERT INTO teams (church_id, name, pin, token) VALUES (?, ?, ?, ?)').run(church.id, name, pin, token);
+    const size = Math.max(0, Math.min(500, Math.floor(Number(body.size) || 0)));
+    const { lastInsertRowid } = db.prepare('INSERT INTO teams (church_id, name, pin, token, side, size) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(church.id, name, pin, token, body.side, size);
+    addEvent('team_joined', { church_id: church.id, team_id: Number(lastInsertRowid) });
     return { token };
+  },
+
+  'POST /api/team/settings': (req, body) => {
+    const team = getTeam(req);
+    if (!team) return [401, { error: 'no_team' }];
+    if (!SIDES.includes(body.side)) return [400, { error: 'side_required' }];
+    const size = Math.max(0, Math.min(500, Math.floor(Number(body.size) || 0)));
+    db.prepare('UPDATE teams SET side = ?, size = ? WHERE id = ?').run(body.side, size, team.id);
+    return { ok: true };
   },
 
   'POST /api/team/login': (req, body) => {
@@ -382,7 +504,7 @@ const routes = {
     const cols = METRICS.map((x) => x.key).join(', ');
     const report = db.prepare(`SELECT ${cols} FROM team_reports WHERE team_id = ? AND day = ?`).get(team.id, day)
       || Object.fromEntries(METRICS.map((x) => [x.key, 0]));
-    const teams = teamTotals(team.church_id);
+    const teams = withBadges(teamTotals(team.church_id));
     return {
       campaign: info,
       day,
@@ -401,11 +523,24 @@ const routes = {
     if (!day) return [400, { error: 'bad_date' }];
     const keys = METRICS.map((x) => x.key);
     const values = keys.map((k) => clampCount(body[k]));
+    const before = earnedIds(team.id);
     db.prepare(`
       INSERT INTO team_reports (team_id, church_id, day, ${keys.join(', ')}) VALUES (?, ?, ?, ${keys.map(() => '?').join(', ')})
       ON CONFLICT (team_id, day) DO UPDATE SET ${keys.map((k) => `${k} = excluded.${k}`).join(', ')}, updated_at = datetime('now')
     `).run(team.id, team.church_id, day, ...values);
-    return { ok: true };
+    // One feed item per team per day, updated as the leader adjusts the numbers.
+    const data = Object.fromEntries(keys.map((k, i) => [k, values[i]]));
+    if (values.some((v) => v > 0)) addEvent('report', { ukey: `report:${team.id}:${day}`, church_id: team.church_id, team_id: team.id, data: { ...data, day } });
+    else db.prepare('DELETE FROM events WHERE ukey = ?').run(`report:${team.id}:${day}`);
+    const after = earnedIds(team.id);
+    const newBadges = [...after.ids].filter((id) => !before.ids.has(id));
+    if (newBadges.length) {
+      addEvent('badge', { church_id: team.church_id, team_id: team.id, data: { badges: newBadges } });
+    }
+    if (after.level > before.level) {
+      addEvent('level', { ukey: `level:${team.id}:${after.level}`, church_id: team.church_id, team_id: team.id, data: { level: after.level } });
+    }
+    return { ok: true, new_badges: newBadges, level: after.level, level_up: after.level > before.level };
   },
 
   'GET /api/dashboard': () => {
@@ -415,7 +550,35 @@ const routes = {
       FROM testimonies t JOIN churches c ON c.id = t.church_id
       ORDER BY t.id DESC LIMIT 50
     `).all();
-    return { campaign: campaignInfo(), region: regionSummary(), churches: churchTotals(), teams: teamTotals(), series, testimonies };
+    const current = weeks().find((w) => w.current);
+    return {
+      campaign: campaignInfo(),
+      region: regionSummary(),
+      churches: churchTotals(),
+      teams: withBadges(teamTotals()),
+      week: current ? { ...current, teams: teamTotals(null, current.from, current.to) } : null,
+      winners: weeklyWinners(),
+      series,
+      testimonies,
+    };
+  },
+
+  'GET /api/feed': (req) => {
+    const m = getMember(req);
+    const client = m ? m.token : cleanText(new URL(req.url, 'http://x').searchParams.get('client'), 64);
+    return { feed: feed(client) };
+  },
+
+  'POST /api/cheer': (req, body) => {
+    const m = getMember(req);
+    const client = m ? m.token : cleanText(body.client, 64);
+    if (client.length < 8 || !['pray', 'love'].includes(body.kind)) return [400, { error: 'bad_request' }];
+    const id = Number(body.event_id);
+    if (!db.prepare('SELECT 1 FROM events WHERE id = ?').get(id)) return [404, { error: 'not_found' }];
+    const had = db.prepare('SELECT 1 FROM cheers WHERE event_id = ? AND client = ? AND kind = ?').get(id, client, body.kind);
+    if (had) db.prepare('DELETE FROM cheers WHERE event_id = ? AND client = ? AND kind = ?').run(id, client, body.kind);
+    else db.prepare('INSERT INTO cheers (event_id, client, kind) VALUES (?, ?, ?)').run(id, client, body.kind);
+    return { ok: true, on: !had };
   },
 
   // Member
@@ -432,7 +595,8 @@ const routes = {
       church: churchTotals().find((c) => c.id === m.church_id),
       region: regionSummary(),
       team_id: m.team_id,
-      teams: teamTotals(m.church_id),
+      teams: withBadges(teamTotals(m.church_id)),
+      badges: badgesForMember(m),
       checklist: db.prepare('SELECT id, text_en, text_es FROM checklist_items ORDER BY sort, id').all(),
       done,
       streak: streak(m.token),
@@ -459,7 +623,7 @@ const routes = {
     } else {
       db.prepare('DELETE FROM checklist_done WHERE member = ? AND item_id = ? AND day = ?').run(m.token, itemId, today());
     }
-    return { ok: true, streak: streak(m.token) };
+    return { ok: true, streak: streak(m.token), badges: badgesForMember(m) };
   },
 
   'POST /api/testimonies': (req, body) => {
@@ -467,7 +631,8 @@ const routes = {
     if (!m) return [401, { error: 'not_joined' }];
     const text = cleanText(body.text, 500);
     if (text.length < 3) return [400, { error: 'too_short' }];
-    db.prepare('INSERT INTO testimonies (church_id, text) VALUES (?, ?)').run(m.church_id, text);
+    const { lastInsertRowid } = db.prepare('INSERT INTO testimonies (church_id, text, member) VALUES (?, ?, ?)').run(m.church_id, text, m.token);
+    addEvent('story', { ukey: `story:${lastInsertRowid}`, church_id: m.church_id, data: { text } });
     return { ok: true };
   },
 
@@ -487,7 +652,7 @@ const routes = {
       role,
       church,
       team_code: db.prepare('SELECT team_code FROM churches WHERE id = ?').get(id).team_code,
-      teams: teamTotals(id),
+      teams: withBadges(teamTotals(id)),
       entries,
       campaign: campaignInfo(),
       checklist: db.prepare('SELECT id, text_en, text_es FROM checklist_items ORDER BY sort, id').all(),
@@ -537,6 +702,15 @@ const routes = {
     const pin = cleanText(body.pin, 30);
     if (pin.length < 4) return [400, { error: 'pin_too_short' }];
     db.prepare('UPDATE teams SET pin = ? WHERE id = ? AND church_id = ?').run(pin, Number(body.team_id), id);
+    return { ok: true };
+  },
+
+  'POST /api/leader/team/settings': (req, body) => {
+    const id = Number(body.church_id);
+    if (!leaderRole(req, id)) return [401, { error: 'bad_pin' }];
+    if (!SIDES.includes(body.side)) return [400, { error: 'side_required' }];
+    const size = Math.max(0, Math.min(500, Math.floor(Number(body.size) || 0)));
+    db.prepare('UPDATE teams SET side = ?, size = ? WHERE id = ? AND church_id = ?').run(body.side, size, Number(body.team_id), id);
     return { ok: true };
   },
 
@@ -627,12 +801,13 @@ const routes = {
 
   'POST /api/admin/testimony/delete': (req, body) => {
     db.prepare('DELETE FROM testimonies WHERE id = ?').run(Number(body.id));
+    db.prepare('DELETE FROM events WHERE ukey = ?').run(`story:${Number(body.id)}`);
     return { ok: true };
   },
 
   'POST /api/admin/reset-activity': (req, body) => {
     if (body.confirm !== 'RESET') return [400, { error: 'confirm_required' }];
-    db.exec('DELETE FROM entries; DELETE FROM team_reports; DELETE FROM manual_entries; DELETE FROM checklist_done; DELETE FROM testimonies;');
+    db.exec('DELETE FROM entries; DELETE FROM team_reports; DELETE FROM manual_entries; DELETE FROM checklist_done; DELETE FROM testimonies; DELETE FROM events;');
     return { ok: true };
   },
 };
@@ -645,9 +820,10 @@ function exportCsv(res) {
     lines.push([esc(c.name), c.members, c.visits, c.goal_visits, c.returned, c.goal_returned,
       c.prayers, c.letters, c.goal_letters, c.practiced].join(','));
   }
-  lines.push('', 'Team,Church,Members,Visits,Returned,Prayers,Letters to Mother,Checklist practices,Last report');
-  for (const t of teamTotals()) {
-    lines.push([esc(t.name), esc(t.church), t.members, t.visits, t.returned, t.prayers, t.letters, t.practiced, t.last_report || ''].join(','));
+  lines.push('', 'Team,Church,Side,Team size,Members joined,Visits,Returned,Prayers,Letters to Mother,Checklist practices,Badges,Level,Last report');
+  for (const t of withBadges(teamTotals())) {
+    lines.push([esc(t.name), esc(t.church), t.side, t.size, t.members, t.visits, t.returned, t.prayers, t.letters, t.practiced,
+      t.earned, t.level, t.last_report || ''].join(','));
   }
   send(res, 200, lines.join('\n') + '\n', {
     'Content-Type': 'text/csv; charset=utf-8',
@@ -678,6 +854,22 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: 'server_error' });
   }
 });
+
+// Daily backup copy of the database, keeping the last 14.
+function backup() {
+  try {
+    const dir = path.join(DATA_DIR, 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `movement-${today()}.db`);
+    if (!fs.existsSync(file)) db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+    const old = fs.readdirSync(dir).filter((f) => /^movement-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().slice(0, -14);
+    for (const f of old) fs.unlinkSync(path.join(dir, f));
+  } catch (err) {
+    console.error('Backup failed:', err.message);
+  }
+}
+backup();
+setInterval(backup, 60 * 60 * 1000);
 
 server.listen(PORT, () => {
   if (ADMIN_PIN === 'changeme') console.warn('WARNING: set ADMIN_PIN to something private.');
