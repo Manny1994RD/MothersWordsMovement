@@ -1,0 +1,12 @@
+{
+  "name": "mothers-words-movement",
+  "version": "1.0.0",
+  "private": true,
+  "description": "40-day regional tracker for visits, returning members, prayers, letters to Mother and the Words of Mother's Love checklist.",
+  "main": "server.js",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "ADMIN_PIN=1234 node server.js"
+  }
+}

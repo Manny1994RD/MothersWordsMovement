@@ -1,0 +1,17 @@
+name: mothers-words-movement
+services:
+  tracker:
+    build: .
+    image: mothers-words-movement:latest
+    container_name: mothers-words-movement
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      # Change this! It unlocks the admin page (churches, goals, checklist).
+      ADMIN_PIN: "change-me-please"
+      # "Today" follows this time zone.
+      TZ: "America/New_York"
+    volumes:
+      # On ZimaOS app data usually lives under /DATA/AppData
+      - /DATA/AppData/mothers-words-movement:/data
