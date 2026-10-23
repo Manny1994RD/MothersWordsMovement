@@ -30,6 +30,23 @@ const I18N = {
     phrases_practiced: 'Phrases practiced (of the 9)', add_entry: 'Add entry', added: 'Added ✓',
     recent: 'Entered by leaders', none_yet: 'Nothing entered yet.', remove: 'Remove', remove_confirm: 'Remove this entry?',
     by_elder: 'Elder', by_leader: 'Leader', log_out: 'Log out', empty_entry: 'Enter at least one number.',
+    nav_team: 'Team', team: 'Team', my_team: 'My team', no_team: '— No team —', team_optional: 'Your team (optional)',
+    team_title: 'Team leader', team_intro: 'Team leaders report their team’s numbers. Everyone else can see the results.',
+    have_invite: 'I have an invitation', new_team: 'Create my team', team_code: 'Team invitation code',
+    team_name: 'Team name', team_pin: 'Team PIN (at least 4 digits, to log in on another phone)',
+    already_team: 'My team is already set up', pick_team: 'Team', bad_team_pin: 'Wrong team PIN.',
+    team_exists: 'A team with that name already exists in this church.', pin_too_short: 'The PIN needs at least 4 characters.',
+    name_required: 'Enter a team name.', team_pin_short: 'Team PIN', report_for: 'Report for', report_title: 'Team report',
+    report_hint: 'Totals for your whole team on this day. Change the date to fix an earlier day.',
+    team_totals: 'Team totals (all 40 days)', church_teams: 'Teams in my church', rank_teams: 'Team ranking',
+    top_teams: 'Top teams in the region', awards: 'Awards', award_visits: 'Most visits', award_returned: 'Most members brought back',
+    award_prayers: 'Most prayers', award_letters: 'Most letters to Mother', award_practiced: 'Most Words of Mother practiced',
+    no_teams: 'No teams yet. Team leaders join with an invitation.', last_report: (d) => `Last report: ${d}`,
+    team_leader_cta: 'Are you a team leader? Report your team’s numbers here.',
+    invite: 'Team leader invitation', invite_intro: 'Send this link (or the code) to each team leader. They enter their team name and a PIN.',
+    copy_link: 'Copy invitation link', copied: 'Copied ✓', teams_title: 'Teams', reset_pin: 'New PIN', delete_team: 'Delete team',
+    delete_team_confirm: (n) => `Delete team “${n}”? Its reports are deleted too.`, new_pin_prompt: 'New team PIN (at least 4 characters):',
+    for_team: 'Team (optional)', church_wide: '— Whole church —', reported_by_teams: 'Results are reported by team leaders.',
   },
   es: {
     nav_home: 'Inicio', nav_board: 'Región', nav_stories: 'Historias', tagline: '40 días del amor de la Madre',
@@ -59,6 +76,23 @@ const I18N = {
     phrases_practiced: 'Frases practicadas (de las 9)', add_entry: 'Agregar', added: 'Agregado ✓',
     recent: 'Ingresado por líderes', none_yet: 'Nada ingresado todavía.', remove: 'Quitar', remove_confirm: '¿Quitar esta entrada?',
     by_elder: 'Anciano', by_leader: 'Líder', log_out: 'Salir', empty_entry: 'Ingrese al menos un número.',
+    nav_team: 'Equipo', team: 'Equipo', my_team: 'Mi equipo', no_team: '— Sin equipo —', team_optional: 'Tu equipo (opcional)',
+    team_title: 'Líder de equipo', team_intro: 'Los líderes de equipo reportan los números de su equipo. Todos los demás pueden ver los resultados.',
+    have_invite: 'Tengo una invitación', new_team: 'Crear mi equipo', team_code: 'Código de invitación del equipo',
+    team_name: 'Nombre del equipo', team_pin: 'PIN del equipo (mínimo 4 dígitos, para entrar en otro teléfono)',
+    already_team: 'Mi equipo ya está creado', pick_team: 'Equipo', bad_team_pin: 'PIN del equipo incorrecto.',
+    team_exists: 'Ya existe un equipo con ese nombre en esta iglesia.', pin_too_short: 'El PIN necesita al menos 4 caracteres.',
+    name_required: 'Ingrese un nombre de equipo.', team_pin_short: 'PIN del equipo', report_for: 'Reporte del', report_title: 'Reporte del equipo',
+    report_hint: 'Totales de todo tu equipo en este día. Cambia la fecha para corregir un día anterior.',
+    team_totals: 'Totales del equipo (los 40 días)', church_teams: 'Equipos de mi iglesia', rank_teams: 'Clasificación de equipos',
+    top_teams: 'Mejores equipos de la región', awards: 'Premios', award_visits: 'Más visitas', award_returned: 'Más miembros que regresaron',
+    award_prayers: 'Más oraciones', award_letters: 'Más cartas a la Madre', award_practiced: 'Más Palabras de la Madre practicadas',
+    no_teams: 'Aún no hay equipos. Los líderes de equipo entran con una invitación.', last_report: (d) => `Último reporte: ${d}`,
+    team_leader_cta: '¿Eres líder de equipo? Reporta aquí los números de tu equipo.',
+    invite: 'Invitación para líderes de equipo', invite_intro: 'Envía este enlace (o el código) a cada líder de equipo. Ellos ponen el nombre del equipo y un PIN.',
+    copy_link: 'Copiar enlace de invitación', copied: 'Copiado ✓', teams_title: 'Equipos', reset_pin: 'Nuevo PIN', delete_team: 'Eliminar equipo',
+    delete_team_confirm: (n) => `¿Eliminar el equipo “${n}”? Sus reportes también se eliminan.`, new_pin_prompt: 'Nuevo PIN del equipo (mínimo 4 caracteres):',
+    for_team: 'Equipo (opcional)', church_wide: '— Toda la iglesia —', reported_by_teams: 'Los resultados los reportan los líderes de equipo.',
   },
 };
 
@@ -103,6 +137,8 @@ async function api(path, opts = {}) {
   if (token) headers['X-Member'] = token;
   const pin = sessionStorage.getItem('adminPin');
   if (pin && (path.startsWith('/api/admin') || path.startsWith('/api/leader'))) headers['X-Admin-Pin'] = pin;
+  const teamToken = store.get('team');
+  if (teamToken && path.startsWith('/api/team')) headers['X-Team'] = teamToken;
   const leaderPin = sessionStorage.getItem('leaderPin');
   if (leaderPin && path.startsWith('/api/leader')) headers['X-Leader-Pin'] = leaderPin;
   const res = await fetch(path, {
@@ -187,6 +223,46 @@ function celebrate(message) {
   })(start);
 }
 
+// Hash routes may carry a query, e.g. #/team?church=1&code=TEAM-ABC
+const hashParams = () => new URLSearchParams(location.hash.split('?')[1] || '');
+
+async function teamSelect(churchId, selected, emptyLabel) {
+  const { teams } = await api(`/api/teams?church_id=${churchId}`);
+  const sel = h('select', h('option', { value: '' }, emptyLabel),
+    teams.map((x) => h('option', { value: x.id, selected: x.id === selected }, x.name)));
+  return { sel, teams };
+}
+
+// Ranked list of teams for one metric.
+function teamRanking(teams, key, showChurch) {
+  const sorted = [...teams].sort((a, b) => b[key] - a[key] || a.name.localeCompare(b.name));
+  if (!sorted.length) return h('p.muted', t('no_teams'));
+  const max = Math.max(1, sorted[0][key]);
+  return h('div', sorted.map((x, i) => h('div.rank',
+    h('div.pos', i === 0 && x[key] > 0 ? icon('trophy', 26) : i + 1),
+    h('div.body',
+      h('div.row-between', h('span.name', x.name), h('span.num', x[key])),
+      showChurch ? h('div.small.muted', x.church) : null,
+      h('div.bar.thin', h('div', { style: `width:${Math.round((x[key] / max) * 100)}%` }))))));
+}
+
+const RANK_KEYS = [...METRICS.map((m) => m.key), 'practiced'];
+const rankLabel = (k) => (k === 'practiced' ? t('practiced') : t(k));
+const rankIcon = (k) => (k === 'practiced' ? 'book' : k);
+
+function rankCard(title, iconName, teams, showChurch, state) {
+  const seg = h('div.seg');
+  const list = h('div');
+  const draw = () => {
+    seg.replaceChildren(...RANK_KEYS.map((k) => h('button' + (k === state.key ? '.on' : ''), {
+      type: 'button', onclick: () => { state.key = k; draw(); },
+    }, icon(rankIcon(k), 18), rankLabel(k))));
+    list.replaceChildren(teamRanking(teams, state.key, showChurch));
+  };
+  draw();
+  return h('div.card', h('h2', icon(iconName), title), seg, list);
+}
+
 // ---------- Views ----------
 async function viewJoin() {
   const info = await api('/api/info');
@@ -194,13 +270,22 @@ async function viewJoin() {
   if (!info.churches.length) return [h('h1', t('welcome')), h('div.card', t('no_churches'))];
   const sel = h('select', info.churches.map((c) => h('option', { value: c.id }, c.name)));
   const code = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'characters' });
+  const teamBox = h('div');
+  let teamSel = null;
+  const loadTeams = async () => {
+    const { sel: ts, teams } = await teamSelect(sel.value, null, t('no_team'));
+    teamSel = teams.length ? ts : null;
+    teamBox.replaceChildren(teamSel ? h('label.field', h('span', t('team_optional')), teamSel) : '');
+  };
+  sel.addEventListener('change', loadTeams);
+  loadTeams();
   const err = h('div.error');
   const form = h('form.card', {
     onsubmit: async (e) => {
       e.preventDefault();
       err.textContent = '';
       try {
-        const r = await api('/api/join', { body: { church_id: Number(sel.value), code: code.value } });
+        const r = await api('/api/join', { body: { church_id: Number(sel.value), code: code.value, team_id: teamSel ? Number(teamSel.value) || null : null } });
         store.set('member', r.token);
         route();
       } catch { err.textContent = t('bad_code'); }
@@ -209,12 +294,15 @@ async function viewJoin() {
     h('p.muted', t('join_intro')),
     h('label.field', h('span', t('church')), sel),
     h('label.field', h('span', t('code')), code),
+    teamBox,
     h('button.btn.block', { type: 'submit' }, t('join')),
     err
   );
-  return [dayBanner(info.campaign), h('h1', t('welcome')), form];
+  return [dayBanner(info.campaign), h('h1', t('welcome')), form,
+    h('a.card.cta', { href: '#/team' }, icon('people', 30), h('span', t('team_leader_cta')))];
 }
 
+const homeRank = { key: 'visits' };
 async function viewHome() {
   if (!store.get('member')) return viewJoin();
   let me;
@@ -227,38 +315,19 @@ async function viewHome() {
   const out = [dayBanner(me.campaign)];
   if (me.word) out.push(h('div.card.word', h('h2', icon('star'), t('word_today')), h('p', pickText(me.word))));
 
-  // Counters — saved shortly after the last tap.
-  const counts = { ...me.today };
-  const savedNote = h('span.saved');
-  let timer;
-  const save = () => {
-    clearTimeout(timer);
-    savedNote.textContent = '';
-    timer = setTimeout(async () => {
-      await api('/api/me/counts', { body: counts });
-      savedNote.textContent = t('saved');
-    }, 600);
-  };
-  const counterRows = METRICS.map((m) => {
-    const val = h('span.val', counts[m.key]);
-    const total = h('small', t('my_total', me.totals[m.key]));
-    const bump = (d) => {
-      const next = Math.max(0, Math.min(50, counts[m.key] + d));
-      val.classList.remove('bump'); void val.offsetWidth; val.classList.add('bump');
-      me.totals[m.key] += next - counts[m.key];
-      counts[m.key] = next;
-      val.textContent = next;
-      total.textContent = t('my_total', me.totals[m.key]);
-      save();
-    };
-    return h('div.counter',
-      h('div.label', icon(m.key, 34), h('div', h('b', t(m.key)), h('small', t(m.key + '_hint')), total)),
-      h('button.pxbtn', { type: 'button', 'aria-label': `${t(m.key)} −1`, onclick: () => bump(-1) }, '-'),
-      val,
-      h('button.pxbtn.plus', { type: 'button', 'aria-label': `${t(m.key)} +1`, onclick: () => bump(1) }, '+')
-    );
+  // Results are reported by team leaders; members see their team and church teams.
+  const { sel: myTeam } = await teamSelect(me.church?.id, me.team_id, t('no_team'));
+  const teamNote = h('span.saved');
+  myTeam.addEventListener('change', async () => {
+    await api('/api/me/team', { body: { team_id: Number(myTeam.value) || null } });
+    teamNote.textContent = t('saved');
+    setTimeout(route, 500);
   });
-  out.push(h('div.card', h('h2', icon('heart'), t('my_today'), savedNote), counterRows));
+  const mine = me.teams.find((x) => x.id === me.team_id);
+  out.push(h('div.card', h('h2', icon('people'), t('my_team'), teamNote),
+    h('label.field', myTeam),
+    mine ? h('div.tiles.mini', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 24), h('div.n', mine[k]), h('div.l', rankLabel(k))))) : null,
+    h('p.small.muted', { style: 'margin-bottom:0' }, t('reported_by_teams'), ' ', h('a', { href: '#/team' }, t('team_leader_cta')))));
 
   // Checklist
   const done = new Set(me.done);
@@ -290,13 +359,14 @@ async function viewHome() {
   const progressCard = (iconName, title, totals) => h('div.card', h('h2', icon(iconName), title),
     METRICS.map((m) => progressRow(t(m.key), totals[m.key], m.goal ? totals[`goal_${m.key}`] : 0, m.key)));
   if (me.church) out.push(progressCard('returned', `${t('my_church')}: ${me.church.name}`, me.church));
+  out.push(rankCard(t('church_teams'), 'trophy', me.teams, false, homeRank));
   out.push(progressCard('globe', `${t('region')}: ${me.campaign.region_name}`, me.region));
 
   out.push(h('p.footer-links',
     h('a', { href: '#', onclick: (e) => {
       e.preventDefault();
       if (confirm(t('switch_confirm'))) { store.del('member'); route(); }
-    } }, t('switch_church')), ' · ', h('a', { href: '#/leader' }, t('leader')), ' · ', h('a', { href: '#/admin' }, t('admin'))));
+    } }, t('switch_church')), ' · ', h('a', { href: '#/team' }, t('team_title')), ' · ', h('a', { href: '#/leader' }, t('leader')), ' · ', h('a', { href: '#/admin' }, t('admin'))));
 
   if (me.church) checkMilestones(`c${me.church.id}`, t('you_church'), me.church);
   checkMilestones('region', t('the_region'), me.region);
@@ -304,6 +374,7 @@ async function viewHome() {
 }
 
 let boardMetric = 'returned';
+const boardRank = { key: 'visits' };
 let chartMetric = 'visits';
 async function viewBoard() {
   const d = await api('/api/dashboard');
@@ -312,7 +383,8 @@ async function viewBoard() {
   const tiles = h('div.tiles',
     METRICS.map((m) => h('div.tile', icon(m.key, 30), h('div.n', r[m.key]), h('div.l', t(m.key)))),
     h('div.tile', icon('book', 30), h('div.n', r.practiced), h('div.l', t('practiced'))),
-    h('div.tile', icon('people', 30), h('div.n', r.members), h('div.l', t('members_joined')))
+    h('div.tile', icon('people', 30), h('div.n', r.teams), h('div.l', t('teams_title'))),
+    h('div.tile', icon('heart', 30), h('div.n', r.members), h('div.l', t('members_joined')))
   );
 
   const goalCard = h('div.card', h('h2', icon('globe'), t('region_totals')),
@@ -374,7 +446,16 @@ async function viewBoard() {
   drawChart();
 
   checkMilestones('region', t('the_region'), r);
-  return [dayBanner(d.campaign), tiles, goalCard,
+  // Awards: the leading team for each category.
+  const awards = h('div.card', h('h2', icon('star'), t('awards')),
+    d.teams.length ? h('div.awards', RANK_KEYS.map((k) => {
+      const best = [...d.teams].sort((a, b) => b[k] - a[k])[0];
+      return h('div.award', icon(rankIcon(k), 30), h('div',
+        h('div.small.muted', t('award_' + k)),
+        best && best[k] > 0 ? h('div', h('b', best.name), h('span.small.muted', ` · ${best.church}`), h('span.num', ` ${best[k]}`)) : h('div.muted', '—')));
+    })) : h('p.muted', t('no_teams')));
+
+  return [dayBanner(d.campaign), tiles, awards, goalCard, rankCard(t('top_teams'), 'people', d.teams, true, boardRank),
     h('div.card', h('h2', icon('trophy'), t('ranking')), seg, rankList),
     h('div.card', h('h2', icon('chart'), t('per_day')), chartSeg, chartBox)];
 }
@@ -436,14 +517,16 @@ async function viewAdmin() {
     const name = h('input', { type: 'text', value: c.name || '', placeholder: 'Church name' });
     const code = h('input', { type: 'text', value: c.join_code || '', placeholder: 'Join code' });
     const lpin = h('input', { type: 'text', value: c.leader_pin || '', placeholder: 'Leader PIN' });
+    const tcode = h('input', { type: 'text', value: c.team_code || '', placeholder: 'Auto' });
     const gv = h('input', { type: 'number', min: 0, value: c.goal_visits ?? 0 });
     const gr = h('input', { type: 'number', min: 0, value: c.goal_returned ?? 0 });
     const gl = h('input', { type: 'number', min: 0, value: c.goal_letters ?? 0 });
     return h('form.admin-row', { onsubmit: (e) => {
       e.preventDefault();
-      post('/api/admin/church', { id: c.id, name: name.value, join_code: code.value, leader_pin: lpin.value, goal_visits: gv.value, goal_returned: gr.value, goal_letters: gl.value });
+      post('/api/admin/church', { id: c.id, name: name.value, join_code: code.value, leader_pin: lpin.value, team_code: tcode.value, goal_visits: gv.value, goal_returned: gr.value, goal_letters: gl.value });
     } },
-      h('div.grid3', field('Church name', name), field('Member join code', code), field('Leader PIN', lpin)),
+      h('div.grid2', field('Church name', name), field('Member join code', code)),
+      h('div.grid2', field('Church leader PIN', lpin), field('Team leader invitation code', tcode)),
       h('div.grid3', field('Goal: visits', gv), field('Goal: returned', gr), field('Goal: letters', gl)),
       h('div.actions',
         h('button.btn.sm', { type: 'submit' }, c.id ? 'Save' : '+ Add church'),
@@ -453,7 +536,7 @@ async function viewAdmin() {
     );
   };
   const churches = h('div.card', h('h2', '⛪ Churches & goals'),
-    h('p.small.muted', 'Members join with the join code. Leaders use the leader PIN on the Leaders page to edit goals and enter counts for members. Prayers are counted but have no goal.'),
+    h('p.small.muted', 'Members join with the member code (to view results and keep the checklist). Team leaders create their team with the invitation code and report their team’s numbers. Church leaders use the leader PIN on the Leaders page. Prayers are counted but have no goal.'),
     d.churches.map(churchForm), churchForm());
 
   // Checklist
@@ -511,6 +594,120 @@ async function viewAdmin() {
   return [h('h1', '🔐 Admin'), settings, churches, checklist, wordsCard, stories, tools];
 }
 
+// ---------- Team leaders ----------
+async function viewTeam() {
+  if (!store.get('team')) return viewTeamJoin();
+  const day = hashParams().get('day') || '';
+  let d;
+  try { d = await api('/api/team/me' + (day ? `?day=${day}` : '')); } catch (e) {
+    if (e.status === 401) { store.del('team'); return viewTeamJoin(); }
+    throw e;
+  }
+  document.getElementById('region-name').textContent = d.campaign.region_name;
+  const out = [h('h1', d.team.name, h('div.small.muted', { style: 'font-size:16px;font-weight:700' }, `${t('team')} · ${d.church.name}`))];
+
+  // Report for the chosen day — saved shortly after the last tap.
+  const vals = { ...d.report };
+  const note = h('span.saved');
+  let timer;
+  const save = () => {
+    clearTimeout(timer);
+    note.textContent = '';
+    timer = setTimeout(async () => {
+      await api('/api/team/report', { body: { day: d.day, ...vals } });
+      note.textContent = t('saved');
+    }, 600);
+  };
+  const date = h('input', { type: 'date', value: d.day, max: d.campaign.today, min: d.campaign.start_date,
+    onchange: () => { location.hash = `#/team?day=${date.value}`; } });
+  const rows = METRICS.map((m) => {
+    const val = h('span.val', vals[m.key]);
+    const bump = (n) => {
+      vals[m.key] = Math.max(0, Math.min(50, vals[m.key] + n));
+      val.textContent = vals[m.key];
+      val.classList.remove('bump'); void val.offsetWidth; val.classList.add('bump');
+      save();
+    };
+    return h('div.counter',
+      h('div.label', icon(m.key, 34), h('div', h('b', t(m.key)), h('small', t(m.key + '_hint')))),
+      h('button.pxbtn', { type: 'button', 'aria-label': `${t(m.key)} −1`, onclick: () => bump(-1) }, '-'),
+      val,
+      h('button.pxbtn.plus', { type: 'button', 'aria-label': `${t(m.key)} +1`, onclick: () => bump(1) }, '+'));
+  });
+  out.push(h('div.card', h('h2', icon('heart'), t('report_title'), note),
+    h('label.field', h('span', t('report_for')), date),
+    h('p.small.muted', { style: 'margin-top:0' }, t('report_hint')),
+    rows));
+
+  out.push(h('div.card', h('h2', icon('chart'), t('team_totals')),
+    h('div.tiles.mini', RANK_KEYS.map((k) => h('div.tile', icon(rankIcon(k), 24), h('div.n', d.team[k]), h('div.l', rankLabel(k)))))));
+  out.push(rankCard(t('church_teams'), 'trophy', d.teams, false, homeRank));
+  out.push(h('p.footer-links', h('a', { href: '#', onclick: (e) => {
+    e.preventDefault(); store.del('team'); route();
+  } }, t('log_out'))));
+  return out;
+}
+
+async function viewTeamJoin() {
+  const info = await api('/api/info');
+  document.getElementById('region-name').textContent = info.campaign.region_name;
+  if (!info.churches.length) return [h('h1', t('team_title')), h('div.card', t('no_churches'))];
+  const q = hashParams();
+  const churchOptions = () => info.churches.map((c) => h('option', { value: c.id, selected: String(c.id) === q.get('church') }, c.name));
+  const showError = (el, e) => { el.textContent = t(e.message === 'bad_code' ? 'bad_code' : e.message === 'bad_pin' ? 'bad_team_pin' : e.message); };
+
+  // Create a team with the invitation
+  const church = h('select', churchOptions());
+  const code = h('input', { type: 'text', value: q.get('code') || '', autocomplete: 'off', autocapitalize: 'characters' });
+  const name = h('input', { type: 'text', maxlength: 60 });
+  const pin = h('input', { type: 'password', inputmode: 'numeric', autocomplete: 'new-password' });
+  const err1 = h('div.error');
+  const createForm = h('form.card', { onsubmit: async (e) => {
+    e.preventDefault(); err1.textContent = '';
+    try {
+      const r = await api('/api/team/create', { body: { church_id: Number(church.value), code: code.value, name: name.value, pin: pin.value } });
+      store.set('team', r.token);
+      location.hash = '#/team';
+      route();
+    } catch (ex) { showError(err1, ex); }
+  } },
+    h('h2', icon('letters'), t('have_invite')),
+    h('label.field', h('span', t('church')), church),
+    h('label.field', h('span', t('team_code')), code),
+    h('label.field', h('span', t('team_name')), name),
+    h('label.field', h('span', t('team_pin')), pin),
+    h('button.btn.block', { type: 'submit' }, t('new_team')), err1);
+
+  // Log in to an existing team
+  const church2 = h('select', churchOptions());
+  const teamBox = h('div');
+  let teamSel;
+  const loadTeams = async () => {
+    ({ sel: teamSel } = await teamSelect(church2.value, null, '—'));
+    teamBox.replaceChildren(h('label.field', h('span', t('pick_team')), teamSel));
+  };
+  church2.addEventListener('change', loadTeams);
+  await loadTeams();
+  const pin2 = h('input', { type: 'password', inputmode: 'numeric', autocomplete: 'current-password' });
+  const err2 = h('div.error');
+  const loginForm = h('form.card', { onsubmit: async (e) => {
+    e.preventDefault(); err2.textContent = '';
+    try {
+      const r = await api('/api/team/login', { body: { team_id: Number(teamSel.value), pin: pin2.value } });
+      store.set('team', r.token);
+      location.hash = '#/team';
+      route();
+    } catch (ex) { showError(err2, ex); }
+  } },
+    h('h2', icon('people'), t('already_team')),
+    h('label.field', h('span', t('church')), church2),
+    teamBox,
+    h('label.field', h('span', t('team_pin_short')), pin2),
+    h('button.btn.block', { type: 'submit' }, t('login')), err2);
+
+  return [h('h1', t('team_title')), h('p.muted', t('team_intro')), createForm, loginForm];
+}
+
 // ---------- Leaders (and the Elder) ----------
 async function viewLeader() {
   const info = await api('/api/info');
@@ -553,6 +750,35 @@ async function viewLeader() {
     out.push(h('div.card', h('p.small.muted', { style: 'margin-top:0' }, t('elder_note')), h('label.field', h('span', t('church')), sel)));
   }
 
+  // Team leader invitation and team management
+  const inviteUrl = `${location.origin}/#/team?church=${c.id}&code=${encodeURIComponent(d.team_code)}`;
+  const copyNote = h('span.saved');
+  out.push(h('div.card', h('h2', icon('letters'), t('invite')),
+    h('p.small.muted', { style: 'margin-top:0' }, t('invite_intro')),
+    h('div.codebox', h('span.small.muted', t('team_code')), h('b', d.team_code)),
+    h('div.actions', h('button.btn.ghost', { type: 'button', onclick: async () => {
+      try { await navigator.clipboard.writeText(inviteUrl); copyNote.textContent = t('copied'); }
+      catch { prompt(t('copy_link'), inviteUrl); }
+    } }, t('copy_link')), copyNote)));
+  out.push(h('div.card', h('h2', icon('people'), `${t('teams_title')} (${d.teams.length})`),
+    d.teams.length ? d.teams.map((tm) => h('div.story',
+      h('div', { style: 'flex:1' }, h('b', tm.name),
+        h('div.small', RANK_KEYS.map((k) => `${rankLabel(k)}: ${tm[k]}`).join(' · ')),
+        h('div.small.muted', tm.last_report ? t('last_report', tm.last_report) : '—')),
+      h('div.actions', { style: 'flex-direction:column;align-items:stretch' },
+        h('button.btn.sm.ghost', { type: 'button', onclick: async () => {
+          const pin = prompt(t('new_pin_prompt'));
+          if (!pin) return;
+          try { await api('/api/leader/team/pin', { body: { church_id: c.id, team_id: tm.id, pin } }); alert(t('saved')); }
+          catch (e) { alert(t(e.message)); }
+        } }, t('reset_pin')),
+        h('button.btn.sm.danger', { type: 'button', onclick: async () => {
+          if (!confirm(t('delete_team_confirm', tm.name))) return;
+          await api('/api/leader/team/delete', { body: { church_id: c.id, team_id: tm.id } });
+          route();
+        } }, t('delete_team')))))
+      : h('p.muted', t('no_teams'))));
+
   // Goals
   const goalInputs = {};
   const goalNote = h('span.saved');
@@ -574,6 +800,7 @@ async function viewLeader() {
 
   // Enter counts for a member
   const date = h('input', { type: 'date', value: d.campaign.today, max: d.campaign.today, min: d.campaign.start_date });
+  const entryTeam = h('select', h('option', { value: '' }, t('church_wide')), d.teams.map((tm) => h('option', { value: tm.id }, tm.name)));
   const vals = {};
   const counterRows = METRICS.map((m) => {
     vals[m.key] = 0;
@@ -603,14 +830,14 @@ async function viewLeader() {
       msg.textContent = ''; ok.textContent = '';
       const practiced = phraseBoxes.filter((p) => p.box.checked).length;
       try {
-        await api('/api/leader/entry', { body: { church_id: c.id, day: date.value, ...vals, practiced } });
+        await api('/api/leader/entry', { body: { church_id: c.id, team_id: Number(entryTeam.value) || null, day: date.value, ...vals, practiced } });
         ok.textContent = t('added');
         setTimeout(route, 700);
       } catch (err) { msg.textContent = err.message === 'empty' ? t('empty_entry') : err.message; }
     },
   }, h('h2', icon('heart'), t('for_member')),
     h('p.small.muted', { style: 'margin-top:0' }, t('for_member_intro')),
-    h('label.field', h('span', t('date')), date),
+    h('div.grid2', h('label.field', h('span', t('date')), date), h('label.field', h('span', t('for_team')), entryTeam)),
     counterRows,
     h('details', { style: 'margin:10px 0' }, h('summary', `${t('phrases_practiced')}`), phraseBoxes.map((p) => p.row)),
     h('div.actions', h('button.btn', { type: 'submit' }, t('add_entry')), ok), msg));
@@ -619,7 +846,7 @@ async function viewLeader() {
   out.push(h('div.card', h('h2', icon('book'), t('recent')),
     d.entries.length ? d.entries.map((en) => h('div.story',
       h('div', { style: 'flex:1' },
-        h('b', en.day), ' · ', h('span.small.muted', en.entered_by === 'elder' ? t('by_elder') : t('by_leader')),
+        h('b', en.day), en.team ? ` · ${en.team}` : '', ' · ', h('span.small.muted', en.entered_by === 'elder' ? t('by_elder') : t('by_leader')),
         h('div.small', METRICS.filter((m) => en[m.key]).map((m) => `${t(m.key)}: ${en[m.key]}`)
           .concat(en.practiced ? [`${t('practiced')}: ${en.practiced}`] : []).join(' · '))),
       h('button.btn.sm.danger', { type: 'button', onclick: async () => {
@@ -638,9 +865,9 @@ async function viewLeader() {
 }
 
 // ---------- Router ----------
-const VIEWS = { '': viewHome, board: viewBoard, stories: viewStories, leader: viewLeader, admin: viewAdmin };
+const VIEWS = { '': viewHome, board: viewBoard, team: viewTeam, stories: viewStories, leader: viewLeader, admin: viewAdmin };
 async function route() {
-  const name = location.hash.replace(/^#\/?/, '').split('/')[0];
+  const name = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0];
   const view = VIEWS[name] || viewHome;
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.getElementById('lang-toggle').textContent = lang === 'en' ? 'ES' : 'EN';

@@ -243,3 +243,28 @@ details summary { cursor: pointer; font-weight: 800; color: var(--purple); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Teams ---------- */
+.row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.row-between .num, .award .num { font-family: var(--pixel-font); font-size: 12px; color: var(--purple); }
+.bar.thin { height: 14px; border-width: 2px; padding: 1px; margin-top: 4px; }
+.tiles.mini { grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 8px; }
+.tiles.mini .tile { padding: 8px; box-shadow: 3px 3px 0 var(--purple-ink); gap: 4px; }
+.tiles.mini .tile .n { font-size: 15px; }
+.tiles.mini .tile .l { font-size: 12px; }
+.awards { display: grid; gap: 10px; }
+.award {
+  display: flex; gap: 12px; align-items: center; padding: 10px 12px;
+  background: #fff1c4; border: 3px solid var(--orange);
+}
+.award b { color: var(--purple-ink); }
+.cta {
+  display: flex; gap: 12px; align-items: center; text-decoration: none;
+  color: var(--purple); font-weight: 800; background: #fff1c4;
+}
+.codebox {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 10px 12px; margin-bottom: 12px; border: 3px dashed var(--purple-ink); background: #fff;
+}
+.codebox b { font-family: var(--pixel-font); font-size: 13px; color: var(--purple); word-break: break-all; }
+.tabs a { font-size: 12px; }

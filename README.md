@@ -3,15 +3,17 @@
 A small, mobile-friendly web app that lets a region track the 40-day movement
 (**Nov 1 – Dec 10, 2026**) together, in **English and Spanish**.
 
-Members use it on their phones (no names collected, only counts):
+It's organized as **region → churches → teams**. **Team leaders report their team's numbers**
+each day, and everyone (members, leaders, the Elder) can see the results. No names are
+collected, only counts:
 
-| Tracked | Goal per church? |
+| Reported by team leaders | Goal per church? |
 |---|---|
 | 🏠 Visits to members | ✅ |
 | ⛪ Members who came back to church (each person once) | ✅ |
 | 🙏 Prayers for members | — (counted only) |
 | ✉️ Letters sent to Mother | ✅ |
-| 📖 The 9 "Words of Mother's Love" checklist, ticked daily | streaks |
+| 📖 The 9 "Words of Mother's Love" checklist: each member ticks it on their own phone | streaks; counts toward the member's team |
 
 Everyone sees their church's progress and the whole region's progress. There's also:
 
@@ -20,6 +22,11 @@ Everyone sees their church's progress and the whole region's progress. There's a
 - **Church leaderboard** ranked by % of goal, and a daily activity chart
 - **Stories**: short, anonymous testimonies
 - **Celebrations**: confetti when a church or the region reaches 25 / 50 / 75 / 100 % of a goal
+- **Teams**: team leaders get an **invitation** (link or code), create their team with a
+  name and a team PIN, then report their team's daily totals on the **Team** tab. They can
+  pick an earlier date to correct a day.
+- **Team rankings & awards**: teams ranked per church and across the region, plus awards for
+  most visits, most members brought back, most prayers, most letters and most checklist practice
 - **Leaders page**: each church leader (with their own leader PIN) and the Elder can edit
   the church's goals and **enter counts for members who can't update on their own**.
   Those entries are added to the totals and can be removed if entered by mistake.
@@ -94,14 +101,19 @@ asking every member to install a VPN app is a big hurdle.
 2. Enter your `ADMIN_PIN`.
 3. **Settings:** region name; dates are prefilled as 2026-11-01 → 2026-12-10.
 4. **Churches & goals:** add each church with a member **join code** (e.g. `BRONX40`), a
-   **leader PIN** for that church's leaders, and the goals the Elder assigns (visits,
+   **leader PIN** for that church's leaders, a **team leader invitation code** (filled in
+   automatically if left empty), and the goals the Elder assigns (visits,
    returned, letters). The region goal is the sum of the church goals.
 5. **Checklist:** the 9 phrases from the poster are preloaded in EN/ES. Put the description
    on the first line and the phrase on the second.
 6. **Word of the day** (optional): fill in days 1–40.
-7. Give each church's leaders their leader PIN. They open **Leaders** at the bottom of the
+7. On the Leaders page, **Copy invitation link** and send it to each team leader. They
+   create their team (name + PIN) and start reporting on the **Team** tab. If a team leader
+   forgets their PIN, the church leader can set a new one (or delete the team).
+8. Give each church's leaders their leader PIN. They open **Leaders** at the bottom of the
    Home page. The Elder can open the Leaders page from Admin → Tools and switch between churches.
-8. Share the link plus each church's join code with its members. They tap
+9. Share the link plus each church's member join code with its members. They pick their
+   team when joining (optional), view the results, and keep the daily checklist. They tap
    **Share → Add to Home Screen** so it opens like an app.
 
 Testing before Nov 1? Set the start date earlier, try it out, then use
