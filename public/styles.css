@@ -408,3 +408,12 @@ body.tv-mode .card { margin-bottom: 10px; }
 body.tv-mode .feed .feed-item { padding: 8px 0; }
 .how { background: #fff1c4; border-left: 4px solid var(--orange); padding: 8px 10px; color: #6b4a1e; }
 .story.current { background: #fff1c4; margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
+.invite-banner {
+  display: flex; gap: 12px; align-items: center; padding: 12px; margin-bottom: 14px;
+  background: #fff1c4; border: 3px solid var(--orange); color: var(--purple-ink);
+}
+label.field small { display: block; margin-top: 4px; font-size: 13px; }
+.save-spot { border-color: var(--coral); background: #fff4f2; }
+.ok { color: var(--leaf); font-weight: 700; }
+details.card > summary { list-style: none; cursor: pointer; }
+details.card > summary::-webkit-details-marker { display: none; }

@@ -129,6 +129,8 @@ addColumn('teams', 'side', "TEXT NOT NULL DEFAULT ''");
 addColumn('teams', 'size', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('testimonies', 'member', 'TEXT');
 addColumn('members', 'shares', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('members', 'nickname', 'TEXT');
+addColumn('members', 'pin_hash', 'TEXT');
 for (const m of GOAL_METRICS) addColumn('churches', `goal_${m.key}`);
 addColumn('churches', 'leader_pin', "TEXT NOT NULL DEFAULT ''");
 
@@ -388,6 +390,38 @@ function safeEqual(a, b) {
 const clampCount = (n) => Math.max(0, Math.min(MAX_PER_DAY, Math.floor(Number(n) || 0)));
 const cleanText = (s, max) => String(s ?? '').trim().slice(0, max);
 
+// ---------- Member nickname + PIN ----------
+const PIN_RE = /^\d{4}$/;
+function hashPin(pin) {
+  const salt = crypto.randomBytes(8).toString('hex');
+  return `${salt}:${crypto.scryptSync(pin, salt, 32).toString('hex')}`;
+}
+function checkPin(pin, stored) {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(':');
+  return safeEqual(crypto.scryptSync(String(pin), salt, 32).toString('hex'), hash);
+}
+// A 4-digit PIN is easy to guess, so lock a nickname for 15 minutes after 5 wrong tries.
+const failures = new Map();
+function locked(key) {
+  const f = failures.get(key);
+  return f && f.count >= 5 && Date.now() - f.at < 15 * 60 * 1000;
+}
+function recordFailure(key) {
+  const f = failures.get(key);
+  const fresh = !f || Date.now() - f.at >= 15 * 60 * 1000;
+  failures.set(key, { count: fresh ? 1 : f.count + 1, at: Date.now() });
+}
+const nicknameTaken = (churchId, nickname, exceptToken = '') =>
+  !!db.prepare('SELECT 1 FROM members WHERE church_id = ? AND lower(nickname) = lower(?) AND token != ?').get(churchId, nickname, exceptToken);
+
+function validProfile(body) {
+  const nickname = cleanText(body.nickname, 30);
+  if (nickname.length < 2) return { error: 'nickname_required' };
+  if (!PIN_RE.test(String(body.pin || ''))) return { error: 'pin_4_digits' };
+  return { nickname, pin: String(body.pin) };
+}
+
 function getMember(req) {
   const token = req.headers['x-member'];
   if (!token) return null;
@@ -457,12 +491,31 @@ const routes = {
     if (!church || !safeEqual(cleanText(body.code, 50).toUpperCase(), church.join_code.toUpperCase())) {
       return [403, { error: 'bad_code' }];
     }
+    const profile = validProfile(body);
+    if (profile.error) return [400, { error: profile.error }];
+    if (nicknameTaken(church.id, profile.nickname)) return [409, { error: 'nickname_taken' }];
     const team = body.team_id
       ? db.prepare('SELECT id FROM teams WHERE id = ? AND church_id = ?').get(Number(body.team_id), church.id)
       : null;
     const token = crypto.randomBytes(24).toString('hex');
-    db.prepare('INSERT INTO members (token, church_id, team_id) VALUES (?, ?, ?)').run(token, church.id, team ? team.id : null);
+    db.prepare('INSERT INTO members (token, church_id, team_id, nickname, pin_hash) VALUES (?, ?, ?, ?, ?)')
+      .run(token, church.id, team ? team.id : null, profile.nickname, hashPin(profile.pin));
     return { token, church_id: church.id };
+  },
+
+  // "I already joined": get back in on a new phone with nickname + PIN.
+  'POST /api/member/login': (req, body) => {
+    const churchId = Number(body.church_id);
+    const nickname = cleanText(body.nickname, 30);
+    const key = `${churchId}:${nickname.toLowerCase()}`;
+    if (locked(key)) return [429, { error: 'too_many_tries' }];
+    const m = db.prepare('SELECT token, pin_hash FROM members WHERE church_id = ? AND lower(nickname) = lower(?)').get(churchId, nickname);
+    if (!m || !checkPin(String(body.pin || ''), m.pin_hash)) {
+      recordFailure(key);
+      return [401, { error: 'bad_login' }];
+    }
+    failures.delete(key);
+    return { token: m.token };
   },
 
   'GET /api/teams': (req) => {
@@ -523,7 +576,30 @@ const routes = {
       team: teams.find((x) => x.id === team.id),
       teams,
       church: churchTotals().find((c) => c.id === team.church_id),
+      // Team leaders invite their members and can see their nicknames (nobody else can).
+      join_code: db.prepare('SELECT join_code FROM churches WHERE id = ?').get(team.church_id).join_code,
+      members: db.prepare(`
+        SELECT m.rowid AS id, m.nickname,
+          (SELECT COUNT(*) FROM checklist_done d WHERE d.member = m.token AND d.day = ?) AS today
+        FROM members m WHERE m.team_id = ? ORDER BY lower(m.nickname)
+      `).all(info.today, team.id),
     };
+  },
+
+  'POST /api/team/member/pin': (req, body) => {
+    const team = getTeam(req);
+    if (!team) return [401, { error: 'no_team' }];
+    if (!PIN_RE.test(String(body.pin || ''))) return [400, { error: 'pin_4_digits' }];
+    const r = db.prepare('UPDATE members SET pin_hash = ? WHERE rowid = ? AND team_id = ? AND nickname IS NOT NULL')
+      .run(hashPin(String(body.pin)), Number(body.member_id), team.id);
+    return r.changes ? { ok: true } : [404, { error: 'not_found' }];
+  },
+
+  'POST /api/team/member/remove': (req, body) => {
+    const team = getTeam(req);
+    if (!team) return [401, { error: 'no_team' }];
+    db.prepare('UPDATE members SET team_id = NULL WHERE rowid = ? AND team_id = ?').run(Number(body.member_id), team.id);
+    return { ok: true };
   },
 
   'POST /api/team/report': (req, body) => {
@@ -600,12 +676,14 @@ const routes = {
     const day = info.today;
     const done = db.prepare('SELECT item_id FROM checklist_done WHERE member = ? AND day = ?')
       .all(m.token, day).map((r) => r.item_id);
+    const nickname = db.prepare('SELECT nickname FROM members WHERE token = ?').get(m.token).nickname;
     const word = db.prepare('SELECT text_en, text_es FROM daily_words WHERE day_number = ?').get(info.day_number);
     return {
       campaign: info,
       church: churchTotals().find((c) => c.id === m.church_id),
       region: regionSummary(),
       team_id: m.team_id,
+      nickname,
       teams: withBadges(teamTotals(m.church_id)),
       badges: badgesForMember(m),
       checklist: db.prepare('SELECT id, text_en, text_es FROM checklist_items ORDER BY sort, id').all(),
@@ -613,6 +691,17 @@ const routes = {
       streak: streak(m.token),
       word: word && (word.text_en || word.text_es) ? word : null,
     };
+  },
+
+  // Members who joined before nicknames existed (or want a new PIN) set them here.
+  'POST /api/me/profile': (req, body) => {
+    const m = getMember(req);
+    if (!m) return [401, { error: 'not_joined' }];
+    const profile = validProfile(body);
+    if (profile.error) return [400, { error: profile.error }];
+    if (nicknameTaken(m.church_id, profile.nickname, m.token)) return [409, { error: 'nickname_taken' }];
+    db.prepare('UPDATE members SET nickname = ?, pin_hash = ? WHERE token = ?').run(profile.nickname, hashPin(profile.pin), m.token);
+    return { ok: true };
   },
 
   'POST /api/me/shared': (req) => {

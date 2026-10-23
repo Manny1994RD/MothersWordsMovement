@@ -5,7 +5,7 @@ const I18N = {
   en: {
     nav_home: 'Home', nav_board: 'Region', nav_stories: 'Activity', tagline: "40 Days of Mother's Love",
     hero_kicker: 'Beginning of Peace', hero_a: 'The Words of', hero_b: "Mother's Love",
-    welcome: 'Welcome!', join_intro: 'Choose your church and enter the code your leader gave you. No names are collected — only counts.',
+    welcome: 'Welcome!', join_intro: 'Choose your church and enter the code your leader gave you. Use a nickname: no real name needed, and results are only counts.',
     church: 'Church', code: 'Church code', join: 'Join', bad_code: 'That code is not correct for this church.',
     no_churches: 'No churches have been set up yet. Ask your admin.',
     day_of: (d, t) => `Day ${d} of ${t}`, starts_in: (n) => `Starts in ${n} day${n === 1 ? '' : 's'}`,
@@ -53,7 +53,7 @@ const I18N = {
   es: {
     nav_home: 'Inicio', nav_board: 'Región', nav_stories: 'Actividad', tagline: '40 días del amor de la Madre',
     hero_kicker: 'Inicio de la Paz', hero_a: 'Palabras de Amor de la', hero_b: 'Madre',
-    welcome: '¡Bienvenido!', join_intro: 'Elige tu iglesia e ingresa el código que te dio tu líder. No se piden nombres — solo números.',
+    welcome: '¡Bienvenido!', join_intro: 'Elige tu iglesia e ingresa el código que te dio tu líder. Usa un apodo: no hace falta tu nombre real, y los resultados son solo números.',
     church: 'Iglesia', code: 'Código de la iglesia', join: 'Entrar', bad_code: 'Ese código no es correcto para esta iglesia.',
     no_churches: 'Aún no hay iglesias configuradas. Pregunta a tu administrador.',
     day_of: (d, t) => `Día ${d} de ${t}`, starts_in: (n) => `Comienza en ${n} día${n === 1 ? '' : 's'}`,
@@ -268,6 +268,19 @@ Object.assign(I18N.en, {
   cert_body: (team, church) => `presented to team ${team} of ${church}`, cert_for: 'for', not_reported: 'Not reported today',
   new_badge_toast: (n) => `🏅 ${n} new badge${n === 1 ? '' : 's'}!`, level_up_toast: (n) => `🌼 Level up! Level ${n}`,
   recap_intro: 'Results so far. After the last day these are the final awards.',
+  nickname: 'Nickname', nickname_hint: 'Only your team leader sees it. You use it to get back in on another phone.',
+  pin4: '4-digit PIN', pin4_hint: 'Remember it. You’ll need it with your nickname.',
+  already_joined: 'I already joined', already_intro: 'Logged out or using a new phone? Enter your nickname and PIN.',
+  get_back_in: 'Get back in', bad_login: 'Nickname or PIN is not correct.', too_many_tries: 'Too many tries. Wait 15 minutes and try again.',
+  nickname_taken: 'That nickname is already used in this church. Try another one.', nickname_required: 'Choose a nickname (at least 2 letters).',
+  pin_4_digits: 'The PIN must be exactly 4 digits.', invited_to: (team, church) => `You’re invited to team ${team} · ${church}`,
+  save_spot: 'Save your spot', save_spot_intro: 'Pick a nickname and a 4-digit PIN so you can get back in if you change phones.',
+  signed_in_as: (n) => `Signed in as ${n}`, invite_members: 'Invite members',
+  invite_members_intro: 'Send this link to your team’s group chat. Members open it, pick a nickname and PIN, and they’re on your team.',
+  send_invite: 'Send invitation', team_members: (n) => `Team members (${n})`, no_members: 'No members have joined yet. Send them the invitation!',
+  practiced_today: 'Practiced today', not_yet_today: 'Not yet today', new_member_pin: 'New 4-digit PIN for this member:',
+  remove_member_confirm: (n) => `Remove ${n} from the team?`, moved_to_team: (team) => `You joined team ${team}!`,
+  invite_text: (team) => `Join our team ${team} in the 40 Days of Mother's Love app 🌼`, member_pin_reset: 'PIN changed. Tell the member their new PIN.',
   badges_how: 'You earn your own badges: practice Mother’s words every day (especially today’s focus phrase), share stories, cheer others in Activity, share the results — and when your team grows, you grow with it.',
 });
 Object.assign(I18N.es, {
@@ -291,6 +304,19 @@ Object.assign(I18N.es, {
   cert_body: (team, church) => `otorgado al equipo ${team} de ${church}`, cert_for: 'por', not_reported: 'No ha reportado hoy',
   new_badge_toast: (n) => `🏅 ¡${n} insignia${n === 1 ? '' : 's'} nueva${n === 1 ? '' : 's'}!`, level_up_toast: (n) => `🌼 ¡Subió de nivel! Nivel ${n}`,
   recap_intro: 'Resultados hasta ahora. Después del último día, estos son los premios finales.',
+  nickname: 'Apodo', nickname_hint: 'Solo tu líder de equipo lo ve. Lo usas para volver a entrar en otro teléfono.',
+  pin4: 'PIN de 4 dígitos', pin4_hint: 'Recuérdalo. Lo necesitarás junto con tu apodo.',
+  already_joined: 'Ya me uní', already_intro: '¿Se cerró la sesión o tienes un teléfono nuevo? Ingresa tu apodo y PIN.',
+  get_back_in: 'Volver a entrar', bad_login: 'El apodo o el PIN no es correcto.', too_many_tries: 'Demasiados intentos. Espera 15 minutos y vuelve a intentar.',
+  nickname_taken: 'Ese apodo ya se usa en esta iglesia. Prueba otro.', nickname_required: 'Elige un apodo (al menos 2 letras).',
+  pin_4_digits: 'El PIN debe tener exactamente 4 dígitos.', invited_to: (team, church) => `Estás invitado al equipo ${team} · ${church}`,
+  save_spot: 'Guarda tu lugar', save_spot_intro: 'Elige un apodo y un PIN de 4 dígitos para poder volver a entrar si cambias de teléfono.',
+  signed_in_as: (n) => `Conectado como ${n}`, invite_members: 'Invitar miembros',
+  invite_members_intro: 'Envía este enlace al chat de tu equipo. Los miembros lo abren, eligen un apodo y PIN, y quedan en tu equipo.',
+  send_invite: 'Enviar invitación', team_members: (n) => `Miembros del equipo (${n})`, no_members: 'Aún no se ha unido nadie. ¡Envíales la invitación!',
+  practiced_today: 'Practicó hoy', not_yet_today: 'Aún no hoy', new_member_pin: 'Nuevo PIN de 4 dígitos para este miembro:',
+  remove_member_confirm: (n) => `¿Quitar a ${n} del equipo?`, moved_to_team: (team) => `¡Te uniste al equipo ${team}!`,
+  invite_text: (team) => `Únete a nuestro equipo ${team} en la app 40 días del amor de la Madre 🌼`, member_pin_reset: 'PIN cambiado. Dile al miembro su nuevo PIN.',
   badges_how: 'Ganas tus propias insignias: practica las palabras de la Madre cada día (sobre todo la frase de enfoque), comparte historias, anima a otros en Actividad, comparte los resultados — y cuando tu equipo crece, tú creces con él.',
 });
 
@@ -549,42 +575,114 @@ function statLine(x) {
 }
 
 // ---------- Views ----------
+function profileFields() {
+  const nickname = h('input', { type: 'text', maxlength: 30, autocomplete: 'nickname', autocapitalize: 'words' });
+  const pin = h('input', { type: 'password', inputmode: 'numeric', pattern: '[0-9]{4}', maxlength: 4, autocomplete: 'new-password' });
+  return {
+    nickname, pin,
+    nodes: [
+      h('label.field', h('span', t('nickname')), nickname, h('small.muted', t('nickname_hint'))),
+      h('label.field', h('span', t('pin4')), pin, h('small.muted', t('pin4_hint'))),
+    ],
+  };
+}
+const errText = (e, fallback) => (I18N.en[e.message] ? t(e.message) : t(fallback));
+
+// Join (optionally from a team invite link: #/join?church=1&code=BRONX&team=3), or get back in.
 async function viewJoin() {
   const info = await api('/api/info');
   document.getElementById('region-name').textContent = info.campaign.region_name;
   if (!info.churches.length) return [h('h1', t('welcome')), h('div.card', t('no_churches'))];
-  const sel = h('select', info.churches.map((c) => h('option', { value: c.id }, c.name)));
-  const code = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'characters' });
+  const q = hashParams();
+  const invited = q.get('church') && q.get('code');
+  const churchOpts = () => info.churches.map((c) => h('option', { value: c.id, selected: String(c.id) === q.get('church') }, c.name));
+
+  const sel = h('select', churchOpts());
+  const code = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'characters', value: q.get('code') || '' });
   const teamBox = h('div');
   let teamSel = null;
+  let inviteTeam = null;
   const loadTeams = async () => {
-    const { sel: ts, teams } = await teamSelect(sel.value, null, t('no_team'));
+    const { sel: ts, teams } = await teamSelect(sel.value, Number(q.get('team')) || null, t('no_team'));
     teamSel = teams.length ? ts : null;
+    inviteTeam = teams.find((x) => String(x.id) === q.get('team')) || null;
     teamBox.replaceChildren(teamSel ? h('label.field', h('span', t('team_optional')), teamSel) : '');
   };
   sel.addEventListener('change', loadTeams);
-  loadTeams();
+  await loadTeams();
+  const prof = profileFields();
   const err = h('div.error');
   const form = h('form.card', {
     onsubmit: async (e) => {
       e.preventDefault();
       err.textContent = '';
       try {
-        const r = await api('/api/join', { body: { church_id: Number(sel.value), code: code.value, team_id: teamSel ? Number(teamSel.value) || null : null } });
+        const r = await api('/api/join', { body: {
+          church_id: Number(sel.value), code: code.value, team_id: teamSel ? Number(teamSel.value) || null : null,
+          nickname: prof.nickname.value, pin: prof.pin.value,
+        } });
         store.set('member', r.token);
+        location.hash = '#/';
         route();
-      } catch { err.textContent = t('bad_code'); }
+      } catch (ex) { err.textContent = errText(ex, 'bad_code'); }
     },
   },
-    h('p.muted', t('join_intro')),
-    h('label.field', h('span', t('church')), sel),
-    h('label.field', h('span', t('code')), code),
-    teamBox,
+    invited && inviteTeam
+      ? h('div.invite-banner', icon('people', 30), h('b', t('invited_to', inviteTeam.name, info.churches.find((c) => String(c.id) === q.get('church'))?.name || '')))
+      : h('p.muted', t('join_intro')),
+    // From an invite link the church, code and team are already filled in.
+    h('div', { hidden: invited && inviteTeam ? true : null },
+      h('label.field', h('span', t('church')), sel),
+      h('label.field', h('span', t('code')), code),
+      teamBox),
+    prof.nodes,
     h('button.btn.block', { type: 'submit' }, t('join')),
     err
   );
-  return [dayBanner(info.campaign), h('h1', t('welcome')), form,
+
+  // Get back in with nickname + PIN
+  const sel2 = h('select', churchOpts());
+  const nick2 = h('input', { type: 'text', maxlength: 30, autocomplete: 'username' });
+  const pin2 = h('input', { type: 'password', inputmode: 'numeric', maxlength: 4, autocomplete: 'current-password' });
+  const err2 = h('div.error');
+  const back = h('details.card', { open: q.get('back') ? true : null },
+    h('summary', h('h2', { style: 'margin:0' }, icon('heart'), t('already_joined'))),
+    h('form', { style: 'margin-top:12px', onsubmit: async (e) => {
+      e.preventDefault(); err2.textContent = '';
+      try {
+        const r = await api('/api/member/login', { body: { church_id: Number(sel2.value), nickname: nick2.value, pin: pin2.value } });
+        store.set('member', r.token);
+        location.hash = '#/';
+        route();
+      } catch (ex) { err2.textContent = errText(ex, 'bad_login'); }
+    } },
+      h('p.small.muted', { style: 'margin-top:0' }, t('already_intro')),
+      h('label.field', h('span', t('church')), sel2),
+      h('label.field', h('span', t('nickname')), nick2),
+      h('label.field', h('span', t('pin4')), pin2),
+      h('button.btn.block.ghost', { type: 'submit' }, t('get_back_in')), err2));
+
+  return [dayBanner(info.campaign), h('h1', t('welcome')), form, back,
     h('a.card.cta', { href: '#/team' }, icon('people', 30), h('span', t('team_leader_cta')))];
+}
+
+// Invite link opened by someone who is already a member: move them to that team.
+async function viewJoinLink() {
+  const q = hashParams();
+  if (!store.get('member')) return viewJoin();
+  const team = Number(q.get('team'));
+  if (team) {
+    try {
+      const me = await api('/api/me');
+      if (me.church && String(me.church.id) === q.get('church') && me.team_id !== team) {
+        await api('/api/me/team', { body: { team_id: team } });
+        const tm = me.teams.find((x) => x.id === team);
+        if (tm) setTimeout(() => celebrate(t('moved_to_team', tm.name)), 300);
+      }
+    } catch {}
+  }
+  history.replaceState(null, '', '#/');
+  return viewHome();
 }
 
 const homeRank = newRank();
@@ -598,6 +696,17 @@ async function viewHome() {
   document.getElementById('region-name').textContent = me.campaign.region_name;
 
   const out = [dayBanner(me.campaign)];
+  if (!me.nickname) {
+    // Members from before nicknames existed: ask once so they can get back in later.
+    const prof = profileFields();
+    const perr = h('div.error');
+    out.push(h('form.card.save-spot', { onsubmit: async (e) => {
+      e.preventDefault(); perr.textContent = '';
+      try { await api('/api/me/profile', { body: { nickname: prof.nickname.value, pin: prof.pin.value } }); route(); }
+      catch (ex) { perr.textContent = errText(ex, 'nickname_required'); }
+    } }, h('h2', icon('heart'), t('save_spot')), h('p.small.muted', { style: 'margin-top:0' }, t('save_spot_intro')),
+      prof.nodes, h('button.btn', { type: 'submit' }, t('save')), perr));
+  }
   if (me.word) out.push(h('div.card.word', h('h2', icon('star'), t('word_today')), h('p', pickText(me.word))));
   // One of the 9 phrases is spotlighted each day.
   const focusIdx = me.checklist.length ? (Math.max(1, me.campaign.day_number) - 1) % me.checklist.length : -1;
@@ -669,6 +778,7 @@ async function viewHome() {
   ].filter(Boolean).join('\n'))));
 
   out.push(h('p.footer-links',
+    me.nickname ? h('span.muted', t('signed_in_as', me.nickname), ' · ') : null,
     h('a', { href: '#', onclick: (e) => {
       e.preventDefault();
       if (confirm(t('switch_confirm'))) { store.del('member'); route(); }
@@ -968,6 +1078,33 @@ async function viewTeam() {
     ].join('\n')))));
   out.push(badgeGrid(d.team.badges, t('team_badges')));
   out.push(rankCard(t('church_teams'), 'trophy', d.teams, false, homeRank));
+
+  // Invite members and see who joined (nicknames are only visible to the team leader)
+  const memberLink = `${location.origin}/#/join?church=${d.team.church_id}&code=${encodeURIComponent(d.join_code)}&team=${d.team.id}`;
+  const copied = h('span.saved');
+  out.push(h('div.card', h('h2', icon('letters'), t('invite_members')),
+    h('p.small.muted', { style: 'margin-top:0' }, t('invite_members_intro')),
+    h('div.actions',
+      h('button.btn.share-btn', { type: 'button', onclick: () => shareText(`${t('invite_text', d.team.name)}\n${memberLink}`) }, icon('share', 20), t('send_invite')),
+      h('button.btn.ghost', { type: 'button', onclick: async () => {
+        try { await navigator.clipboard.writeText(memberLink); copied.textContent = t('copied'); } catch { prompt(t('copy_link'), memberLink); }
+      } }, t('copy_link')), copied)));
+  out.push(h('div.card', h('h2', icon('people'), t('team_members', d.members.length)),
+    d.members.length ? d.members.map((mb) => h('div.story',
+      h('div', { style: 'flex:1;min-width:0' }, h('b', mb.nickname || '—'),
+        h('div.small' + (mb.today ? '.ok' : '.muted'), mb.today ? `✓ ${t('practiced_today')} (${mb.today})` : t('not_yet_today'))),
+      mb.nickname ? h('button.btn.sm.ghost', { type: 'button', onclick: async () => {
+        const pin = prompt(t('new_member_pin'));
+        if (!pin) return;
+        try { await api('/api/team/member/pin', { body: { member_id: mb.id, pin } }); alert(t('member_pin_reset')); }
+        catch (e) { alert(errText(e, 'pin_4_digits')); }
+      } }, t('reset_pin')) : null,
+      h('button.btn.sm.danger', { type: 'button', 'aria-label': t('remove'), onclick: async () => {
+        if (!confirm(t('remove_member_confirm', mb.nickname || '—'))) return;
+        await api('/api/team/member/remove', { body: { member_id: mb.id } });
+        route();
+      } }, '✕')))
+      : h('p.muted', t('no_members'))));
 
   // Side and size (size makes per-member comparisons fair)
   const side = sideSelect(d.team.side);
@@ -1306,7 +1443,7 @@ async function viewCert() {
 
 // ---------- Router ----------
 const VIEWS = { '': viewHome, board: viewBoard, team: viewTeam, stories: viewStories, leader: viewLeader, admin: viewAdmin,
-  tv: viewTv, recap: viewRecap, cert: viewCert };
+  tv: viewTv, recap: viewRecap, cert: viewCert, join: viewJoinLink };
 async function route() {
   const name = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0];
   const view = VIEWS[name] || viewHome;

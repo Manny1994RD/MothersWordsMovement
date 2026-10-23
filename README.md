@@ -117,7 +117,14 @@ asking every member to install a VPN app is a big hurdle.
 | **Elder / Overseer** | **Leaders** page → "★ Elder / Overseer" + the overseer PIN (set by the admin in Settings) | Sees an overview of every church (progress, who reported today) and adjusts anything in any church: goals, teams, team PINs, entries for members. The overseer PIN covers every church, including the one they lead. |
 | **Church leader** | **Leaders** page → their church + its leader PIN | The same, but only for their own church. |
 | **Team leader** | **Team** tab (invitation link, then team PIN) | Reports their team's daily numbers and edits the team's side and size. |
-| **Member** | Member join code | Views results, keeps the daily checklist and earns personal badges. |
+| **Member** | Team invite link (or member join code) + nickname + 4-digit PIN | Views results, keeps the daily checklist and earns personal badges. |
+
+**How members join:** the team leader taps **Invite members** on the Team tab and sends the
+link to the team's group chat. The link fills in the church, code and team; the member picks a
+**nickname** and a **4-digit PIN** and taps Join. If they get logged out or change phones, they
+tap **I already joined** and enter their nickname and PIN to get their badges and streak back.
+Nicknames are only visible to their team leader, who can also reset a forgotten PIN. After 5
+wrong PINs the nickname is locked for 15 minutes, and PINs are stored hashed.
 
 **How members earn badges:** a team leader's report never takes badges away from members.
 Members earn their own badges by practicing the checklist every day, especially the day's
@@ -146,8 +153,8 @@ and the **Champion Team Member** badge when their team wins a weekly challenge.
    forgets their PIN, the church leader can set a new one (or delete the team).
 8. Give each church's leaders their leader PIN. They open **Leaders** at the bottom of the
    Home page. The Elder can open the Leaders page from Admin → Tools and switch between churches.
-9. Share the link plus each church's member join code with its members. They pick their
-   team when joining (optional), view the results, and keep the daily checklist. They tap
+9. Team leaders invite their members with **Invite members** on the Team tab. Members
+   can also join with the church's member join code and pick their team themselves. They tap
    **Share → Add to Home Screen** so it opens like an app.
 
 Testing before Nov 1? Set the start date earlier, try it out, then use
