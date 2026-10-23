@@ -128,6 +128,7 @@ addColumn('churches', 'team_code', "TEXT NOT NULL DEFAULT ''");
 addColumn('teams', 'side', "TEXT NOT NULL DEFAULT ''");
 addColumn('teams', 'size', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('testimonies', 'member', 'TEXT');
+addColumn('members', 'shares', 'INTEGER NOT NULL DEFAULT 0');
 for (const m of GOAL_METRICS) addColumn('churches', `goal_${m.key}`);
 addColumn('churches', 'leader_pin', "TEXT NOT NULL DEFAULT ''");
 
@@ -140,6 +141,7 @@ const DEFAULT_SETTINGS = {
   region_name: 'Our Region',
   start_date: '2026-11-01',
   end_date: '2026-12-10',
+  overseer_pin: '',
 };
 for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
   db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(k, v);
@@ -172,7 +174,8 @@ function campaignInfo() {
   const t = today();
   const total = daysBetween(s.start_date, s.end_date) + 1;
   const dayNumber = daysBetween(s.start_date, t) + 1;
-  return { ...s, today: t, total_days: total, day_number: dayNumber };
+  // Only public settings: the overseer PIN must never reach the browser.
+  return { region_name: s.region_name, start_date: s.start_date, end_date: s.end_date, today: t, total_days: total, day_number: dayNumber };
 }
 
 function streak(token) {
@@ -282,13 +285,18 @@ function withBadges(teams) {
   return teams.map((t) => {
     const badges = teamBadges(t, reports.filter((r) => r.team_id === t.id), info, champs[t.id] || 0);
     const earned = badges.filter((b) => b.earned).length;
-    return { ...t, badges, earned, badge_total: badges.length, ...levelFor(earned) };
+    return { ...t, badges, earned, badge_total: badges.length, champions: champs[t.id] || 0, ...levelFor(earned) };
   });
 }
 
 function badgesForMember(m) {
   const info = campaignInfo();
+  const team = m.team_id ? withBadges(teamTotals().filter((x) => x.id === m.team_id))[0] : null;
   return memberBadges({
+    startDate: info.start_date,
+    teamLevel: team ? team.level : 0,
+    teamChampion: team ? team.champions : 0,
+    shares: db.prepare('SELECT shares FROM members WHERE token = ?').get(m.token)?.shares || 0,
     ticks: db.prepare('SELECT day, item_id FROM checklist_done WHERE member = ? AND day BETWEEN ? AND ?').all(m.token, info.start_date, info.end_date),
     itemIds: db.prepare('SELECT id FROM checklist_items ORDER BY sort, id').all().map((r) => r.id),
     stories: db.prepare('SELECT COUNT(*) AS n FROM testimonies WHERE member = ?').get(m.token).n,
@@ -395,11 +403,14 @@ function getTeam(req) {
 const validDay = (day, info) =>
   /^\d{4}-\d{2}-\d{2}$/.test(day || '') && day >= info.start_date && day <= info.today ? day : null;
 
-// The elder (admin PIN) may act for any church; a leader only for their own church.
+// Roles: the admin (ADMIN_PIN) and the elder/overseer (overseer PIN) may act for any church;
+// a church leader only for their own church.
 function leaderRole(req, churchId) {
   const adminPin = req.headers['x-admin-pin'];
-  if (adminPin && safeEqual(adminPin, ADMIN_PIN)) return 'elder';
+  if (adminPin && safeEqual(adminPin, ADMIN_PIN)) return 'admin';
   const pin = req.headers['x-leader-pin'];
+  const overseer = getSettings().overseer_pin;
+  if (pin && overseer && safeEqual(pin, overseer)) return 'elder';
   const church = db.prepare('SELECT leader_pin FROM churches WHERE id = ?').get(Number(churchId));
   if (pin && church && church.leader_pin && safeEqual(pin, church.leader_pin)) return 'leader';
   return null;
@@ -604,6 +615,13 @@ const routes = {
     };
   },
 
+  'POST /api/me/shared': (req) => {
+    const m = getMember(req);
+    if (!m) return [401, { error: 'not_joined' }];
+    db.prepare('UPDATE members SET shares = shares + 1 WHERE token = ?').run(m.token);
+    return { ok: true, badges: badgesForMember(m) };
+  },
+
   'POST /api/me/team': (req, body) => {
     const m = getMember(req);
     if (!m) return [401, { error: 'not_joined' }];
@@ -648,8 +666,20 @@ const routes = {
       FROM manual_entries e LEFT JOIN teams tm ON tm.id = e.team_id
       WHERE e.church_id = ? ORDER BY e.id DESC LIMIT 100
     `).all(id);
+    let overview = null;
+    if (role !== 'leader') {
+      const today = campaignInfo().today;
+      const teams = teamTotals();
+      overview = churchTotals().map((c) => ({
+        id: c.id, name: c.name, visits: c.visits, returned: c.returned, letters: c.letters,
+        goal_visits: c.goal_visits, goal_returned: c.goal_returned, goal_letters: c.goal_letters,
+        teams: teams.filter((x) => x.church_id === c.id).length,
+        reported_today: teams.filter((x) => x.church_id === c.id && x.last_report === today).length,
+      }));
+    }
     return {
       role,
+      overview,
       church,
       team_code: db.prepare('SELECT team_code FROM churches WHERE id = ?').get(id).team_code,
       teams: withBadges(teamTotals(id)),
@@ -739,6 +769,11 @@ const routes = {
     const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value');
     const dateRe = /^\d{4}-\d{2}-\d{2}$/;
     if (body.region_name !== undefined) up.run('region_name', cleanText(body.region_name, 100) || 'Our Region');
+    if (body.overseer_pin !== undefined) {
+      const pin = cleanText(body.overseer_pin, 50);
+      if (pin && pin.length < 4) return [400, { error: 'pin_too_short' }];
+      up.run('overseer_pin', pin);
+    }
     for (const k of ['start_date', 'end_date']) {
       if (body[k] !== undefined) {
         if (!dateRe.test(body[k])) return [400, { error: 'bad_date' }];

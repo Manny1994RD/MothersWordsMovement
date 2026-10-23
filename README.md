@@ -109,11 +109,30 @@ asking every member to install a VPN app is a big hurdle.
 
 ---
 
+## Who can do what
+
+| Role | How they sign in | Can do |
+|---|---|---|
+| **Admin** (back end) | `ADMIN_PIN` on the **Admin** page | Everything: settings, dates, churches, codes and PINs, checklist, words of the day, stories, CSV export, reset. Can also open the Leaders page for any church. |
+| **Elder / Overseer** | **Leaders** page → "★ Elder / Overseer" + the overseer PIN (set by the admin in Settings) | Sees an overview of every church (progress, who reported today) and adjusts anything in any church: goals, teams, team PINs, entries for members. The overseer PIN covers every church, including the one they lead. |
+| **Church leader** | **Leaders** page → their church + its leader PIN | The same, but only for their own church. |
+| **Team leader** | **Team** tab (invitation link, then team PIN) | Reports their team's daily numbers and edits the team's side and size. |
+| **Member** | Member join code | Views results, keeps the daily checklist and earns personal badges. |
+
+**How members earn badges:** a team leader's report never takes badges away from members.
+Members earn their own badges by practicing the checklist every day, especially the day's
+focus phrase, and by sharing stories, cheering in the Activity feed and sharing the results.
+Some badges come from their team: the **Team Pride** badges when their team reaches a new level,
+and the **Champion Team Member** badge when their team wins a weekly challenge.
+
+---
+
 ## First-time setup (admin)
 
 1. Open the app → **Admin** link at the bottom of the Home page (or go to `/#/admin`).
 2. Enter your `ADMIN_PIN`.
-3. **Settings:** region name; dates are prefilled as 2026-11-01 → 2026-12-10.
+3. **Settings:** region name; dates are prefilled as 2026-11-01 → 2026-12-10. Set the
+   **Elder / Overseer PIN** and give it to the elder.
 4. **Churches & goals:** add each church with a member **join code** (e.g. `BRONX40`), a
    **leader PIN** for that church's leaders, a **team leader invitation code** (filled in
    automatically if left empty), and the goals the Elder assigns (visits,

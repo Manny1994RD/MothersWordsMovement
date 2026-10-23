@@ -406,3 +406,5 @@ body.tv-mode .awards { grid-template-columns: repeat(2, 1fr); }
 body.tv-mode .award { padding: 8px 12px; }
 body.tv-mode .card { margin-bottom: 10px; }
 body.tv-mode .feed .feed-item { padding: 8px 0; }
+.how { background: #fff1c4; border-left: 4px solid var(--orange); padding: 8px 10px; color: #6b4a1e; }
+.story.current { background: #fff1c4; margin: 0 -10px; padding-left: 10px; padding-right: 10px; }

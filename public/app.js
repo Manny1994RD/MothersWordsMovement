@@ -24,7 +24,9 @@ const I18N = {
     switch_church: 'Switch church', switch_confirm: 'Leave this church on this phone? Your past counts stay recorded.',
     admin: 'Admin', pin: 'Admin PIN', login: 'Log in', bad_pin: 'Wrong PIN.',
     leader: 'Leaders', leader_title: 'Leader page', leader_intro: 'For church leaders and the Elder: set goals and enter counts for members who can’t update on their own.',
-    leader_pin: 'Leader PIN', elder_note: 'Logged in as Elder — you can manage any church.',
+    leader_pin: 'Leader PIN', elder_note: 'Logged in as Elder (overseer) — you can see and adjust every church.',
+    admin_note: 'Logged in as Admin — you can see and adjust every church.', overseer_opt: '★ Elder / Overseer (all churches)',
+    pin: 'PIN', overview: 'All churches', reported_today: (a, b) => `${a}/${b} teams reported today`, manage: 'Manage', by_admin: 'Admin',
     goals: 'Church goals', save_goals: 'Save goals', for_member: 'Enter for a member',
     for_member_intro: 'Adds to the church totals. No names — only numbers.', date: 'Date',
     phrases_practiced: 'Phrases practiced (of the 9)', add_entry: 'Add entry', added: 'Added ✓',
@@ -70,7 +72,9 @@ const I18N = {
     switch_church: 'Cambiar iglesia', switch_confirm: '¿Salir de esta iglesia en este teléfono? Tus números anteriores se quedan registrados.',
     admin: 'Admin', pin: 'PIN de administrador', login: 'Entrar', bad_pin: 'PIN incorrecto.',
     leader: 'Líderes', leader_title: 'Página de líderes', leader_intro: 'Para líderes de iglesia y el Anciano: fijar metas e ingresar números por miembros que no pueden hacerlo solos.',
-    leader_pin: 'PIN de líder', elder_note: 'Conectado como Anciano — puede administrar cualquier iglesia.',
+    leader_pin: 'PIN de líder', elder_note: 'Conectado como Anciano (supervisor) — puede ver y ajustar todas las iglesias.',
+    admin_note: 'Conectado como Admin — puede ver y ajustar todas las iglesias.', overseer_opt: '★ Anciano / Supervisor (todas las iglesias)',
+    pin: 'PIN', overview: 'Todas las iglesias', reported_today: (a, b) => `${a}/${b} equipos reportaron hoy`, manage: 'Administrar', by_admin: 'Admin',
     goals: 'Metas de la iglesia', save_goals: 'Guardar metas', for_member: 'Ingresar por un miembro',
     for_member_intro: 'Se suma a los totales de la iglesia. Sin nombres — solo números.', date: 'Fecha',
     phrases_practiced: 'Frases practicadas (de las 9)', add_entry: 'Agregar', added: 'Agregado ✓',
@@ -264,6 +268,7 @@ Object.assign(I18N.en, {
   cert_body: (team, church) => `presented to team ${team} of ${church}`, cert_for: 'for', not_reported: 'Not reported today',
   new_badge_toast: (n) => `🏅 ${n} new badge${n === 1 ? '' : 's'}!`, level_up_toast: (n) => `🌼 Level up! Level ${n}`,
   recap_intro: 'Results so far. After the last day these are the final awards.',
+  badges_how: 'You earn your own badges: practice Mother’s words every day (especially today’s focus phrase), share stories, cheer others in Activity, share the results — and when your team grows, you grow with it.',
 });
 Object.assign(I18N.es, {
   save: 'Guardar', sisters: 'Hermanas', brothers: 'Hermanos', all_sides: 'Todos', side: 'Lado', side_required: 'Elige Hermanos o Hermanas.',
@@ -286,6 +291,7 @@ Object.assign(I18N.es, {
   cert_body: (team, church) => `otorgado al equipo ${team} de ${church}`, cert_for: 'por', not_reported: 'No ha reportado hoy',
   new_badge_toast: (n) => `🏅 ¡${n} insignia${n === 1 ? '' : 's'} nueva${n === 1 ? '' : 's'}!`, level_up_toast: (n) => `🌼 ¡Subió de nivel! Nivel ${n}`,
   recap_intro: 'Resultados hasta ahora. Después del último día, estos son los premios finales.',
+  badges_how: 'Ganas tus propias insignias: practica las palabras de la Madre cada día (sobre todo la frase de enfoque), comparte historias, anima a otros en Actividad, comparte los resultados — y cuando tu equipo crece, tú creces con él.',
 });
 
 // name / description for each badge, in both languages. Tiered badges share a group name.
@@ -313,6 +319,11 @@ const BADGE_TEXT = {
   super_supporter: [['Super Supporter', 'Cheer 50 times in the activity feed'], ['Gran animador', 'Animar 50 veces en la actividad']],
   streak: [['Daily Heart', (g) => `Practice ${g} days in a row`], ['Corazón diario', (g) => `Practicar ${g} días seguidos`]],
   all9: [['Perfect Day', (g) => `All 9 phrases in a day, ${g} time${g === 1 ? '' : 's'}`], ['Día perfecto', (g) => `Las 9 frases en un día, ${g} vez${g === 1 ? '' : 'es'}`]],
+  focus: [['Focus Follower', (g) => `Practice the day’s focus phrase on ${g} day${g === 1 ? '' : 's'}`], ['Seguidor del enfoque', (g) => `Practicar la frase de enfoque del día en ${g} día${g === 1 ? '' : 's'}`]],
+  team_pride: [['Team Pride', (g) => `Your team reaches Level ${g}`], ['Orgullo de equipo', (g) => `Tu equipo llega al Nivel ${g}`]],
+  messenger: [['Messenger', 'Share the results once'], ['Mensajero', 'Compartir los resultados una vez']],
+  herald: [['Herald', 'Share the results 10 times'], ['Heraldo', 'Compartir los resultados 10 veces']],
+  champion_member: [['Champion Team Member', 'Your team wins a weekly challenge'], ['Miembro campeón', 'Tu equipo gana un reto semanal']],
   ticks: [['Words Collector', (g) => `${g} phrases practiced`], ['Coleccionista de palabras', (g) => `${g} frases practicadas`]],
 };
 const PHRASE_NAMES = [
@@ -341,7 +352,7 @@ function levelBox(team) {
       h('div.small.muted', team.next ? t('level_next', team.earned, team.next) : t('level_max'))));
 }
 
-function badgeGrid(badges, title, open) {
+function badgeGrid(badges, title, open, hint) {
   const earned = badges.filter((b) => b.earned).length;
   let all = true;
   const grid = h('div.badges');
@@ -362,6 +373,7 @@ function badgeGrid(badges, title, open) {
   draw();
   return h('details.card.badge-card', { open: open || null },
     h('summary', h('h2', { style: 'margin:0' }, icon('trophy'), title, h('span.badge-count', `${earned}/${badges.length}`))),
+    hint ? h('p.small.how', hint) : null,
     h('p.small.muted', t('earned_of', earned, badges.length), ' ', toggle),
     grid);
 }
@@ -522,7 +534,15 @@ async function shareText(text) {
   window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`, '_blank', 'noopener');
 }
 function shareBtn(label, makeText) {
-  return h('button.btn.share-btn', { type: 'button', onclick: () => shareText(makeText()) }, icon('share', 20), label);
+  return h('button.btn.share-btn', { type: 'button', onclick: async () => {
+    await shareText(makeText());
+    if (!store.get('member')) return;
+    // Sharing counts toward the member's Messenger / Herald badges.
+    const r = await api('/api/me/shared', { body: {} }).catch(() => null);
+    const fresh = r ? r.badges.filter((b) => b.earned && ['messenger', 'herald'].includes(b.id) && !store.get('b:' + b.id)) : [];
+    for (const b of fresh) store.set('b:' + b.id, '1');
+    if (fresh.length) celebrate(`${t('new_badge_toast', fresh.length)} ${fresh.map((b) => badgeText(b)[0]).join(', ')}`);
+  } }, icon('share', 20), label);
 }
 function statLine(x) {
   return METRICS.map((m) => `${t(m.key)}: ${x[m.key]}`).join(' · ');
@@ -625,7 +645,7 @@ async function viewHome() {
       const had = new Set(myBadges.filter((b) => b.earned).map((b) => b.id));
       const fresh = r.badges.filter((b) => b.earned && !had.has(b.id));
       myBadges = r.badges;
-      badgeBox.replaceChildren(badgeGrid(myBadges, t('my_badges'), badgeBox.firstChild?.open));
+      badgeBox.replaceChildren(badgeGrid(myBadges, t('my_badges'), badgeBox.firstChild?.open, t('badges_how')));
       if (fresh.length) celebrate(`${t('new_badge_toast', fresh.length)} ${fresh.map((b) => badgeText(b)[0]).join(', ')}`);
       if (box.checked && me.checklist.every((it) => it.id === item.id || done.has(it.id))) celebrate('💯 9/9!');
       box.checked ? done.add(item.id) : done.delete(item.id);
@@ -634,7 +654,7 @@ async function viewHome() {
   });
   out.push(h('div.card', h('h2', icon('book'), t('checklist')), checks, streakEl));
   let myBadges = me.badges;
-  const badgeBox = h('div', badgeGrid(myBadges, t('my_badges')));
+  const badgeBox = h('div', badgeGrid(myBadges, t('my_badges'), false, t('badges_how')));
   out.push(badgeBox);
 
   const progressCard = (iconName, title, totals) => h('div.card', h('h2', icon(iconName), title),
@@ -642,6 +662,11 @@ async function viewHome() {
   if (me.church) out.push(progressCard('returned', `${t('my_church')}: ${me.church.name}`, me.church));
   out.push(rankCard(t('church_teams'), 'trophy', me.teams, false, homeRank));
   out.push(progressCard('globe', `${t('region')}: ${me.campaign.region_name}`, me.region));
+  out.push(h('div.share-row', shareBtn(t('share_region'), () => [
+    `🌼 ${me.campaign.region_name} · ${t('day_of', Math.max(1, Math.min(me.campaign.day_number, me.campaign.total_days)), me.campaign.total_days)}`,
+    statLine(me.region),
+    me.checklist.length ? `✨ ${pickText(me.checklist[focusIdx]).split('\n').pop()}` : '',
+  ].filter(Boolean).join('\n'))));
 
   out.push(h('p.footer-links',
     h('a', { href: '#', onclick: (e) => {
@@ -789,10 +814,12 @@ async function viewAdmin() {
 
   // Settings
   const rn = h('input', { type: 'text', value: d.settings.region_name });
+  const op = h('input', { type: 'text', value: d.settings.overseer_pin || '', placeholder: 'At least 4 characters' });
   const sd = h('input', { type: 'date', value: d.settings.start_date });
   const ed = h('input', { type: 'date', value: d.settings.end_date });
-  const settings = h('form.card', { onsubmit: (e) => { e.preventDefault(); post('/api/admin/settings', { region_name: rn.value, start_date: sd.value, end_date: ed.value }); } },
+  const settings = h('form.card', { onsubmit: (e) => { e.preventDefault(); post('/api/admin/settings', { region_name: rn.value, start_date: sd.value, end_date: ed.value, overseer_pin: op.value }); } },
     h('h2', '⚙️ Settings'), field('Region name', rn), h('div.grid2', field('Start date', sd), field('End date', ed)),
+    field('Elder / Overseer PIN (sees and adjusts every church on the Leaders page)', op),
     h('button.btn', { type: 'submit' }, 'Save settings'));
 
   // Churches
@@ -1029,26 +1056,30 @@ async function viewTeamJoin() {
 async function viewLeader() {
   const info = await api('/api/info');
   document.getElementById('region-name').textContent = info.campaign.region_name;
-  const isElder = !!sessionStorage.getItem('adminPin');
+  const isElder = !!sessionStorage.getItem('adminPin');  // the admin can always open this page
   let churchId = Number(sessionStorage.getItem('leaderChurch')) || (isElder ? info.churches[0]?.id : 0);
   if (!info.churches.length) return [h('h1', t('leader_title')), h('div.card', t('no_churches'))];
 
   const loginForm = (message) => {
-    const sel = h('select', info.churches.map((c) => h('option', { value: c.id }, c.name)));
+    const sel = h('select', h('option', { value: 'overseer' }, t('overseer_opt')),
+      info.churches.map((c) => h('option', { value: c.id, selected: String(c.id) === sessionStorage.getItem('leaderChurch') }, c.name)));
+    if (!sessionStorage.getItem('leaderChurch')) sel.value = String(info.churches[0].id);
     const pin = h('input', { type: 'password', autocomplete: 'off' });
     const err = h('div.error', message || '');
     return [h('h1', t('leader_title')), h('form.card', {
       onsubmit: async (e) => {
         e.preventDefault();
+        // The overseer PIN works with any church; start on the first one.
+        const id = sel.value === 'overseer' ? String(info.churches[0].id) : sel.value;
         sessionStorage.setItem('leaderPin', pin.value);
-        sessionStorage.setItem('leaderChurch', sel.value);
-        try { await api('/api/leader/church', { body: { church_id: Number(sel.value) } }); route(); } catch {
+        sessionStorage.setItem('leaderChurch', id);
+        try { await api('/api/leader/church', { body: { church_id: Number(id) } }); route(); } catch {
           sessionStorage.removeItem('leaderPin'); err.textContent = t('bad_pin');
         }
       },
     }, h('p.muted', t('leader_intro')),
       h('label.field', h('span', t('church')), sel),
-      h('label.field', h('span', t('leader_pin')), pin),
+      h('label.field', h('span', t('pin')), pin),
       h('button.btn.block', { type: 'submit' }, t('login')), err)];
   };
   if (!isElder && !sessionStorage.getItem('leaderPin')) return loginForm();
@@ -1061,10 +1092,18 @@ async function viewLeader() {
   const c = d.church;
   const out = [h('h1', t('leader_title'))];
 
-  if (d.role === 'elder') {
-    const sel = h('select', { onchange: () => { sessionStorage.setItem('leaderChurch', sel.value); route(); } },
+  if (d.role !== 'leader') {
+    const pick = (id) => { sessionStorage.setItem('leaderChurch', id); route(); };
+    const sel = h('select', { onchange: () => pick(sel.value) },
       info.churches.map((x) => h('option', { value: x.id, selected: x.id === c.id }, x.name)));
-    out.push(h('div.card', h('p.small.muted', { style: 'margin-top:0' }, t('elder_note')), h('label.field', h('span', t('church')), sel)));
+    out.push(h('div.card', h('h2', icon('globe'), t('overview')),
+      h('p.small.muted', { style: 'margin-top:0' }, t(d.role === 'admin' ? 'admin_note' : 'elder_note')),
+      d.overview.map((x) => h('div.story' + (x.id === c.id ? '.current' : ''),
+        h('div', { style: 'flex:1;min-width:0' }, h('b', x.name),
+          h('div.small', `${t('visits')}: ${x.visits}/${x.goal_visits} · ${t('returned')}: ${x.returned}/${x.goal_returned} · ${t('letters')}: ${x.letters}/${x.goal_letters}`),
+          h('div.small' + (x.reported_today < x.teams ? '.warn' : '.muted'), t('reported_today', x.reported_today, x.teams))),
+        h('button.btn.sm' + (x.id === c.id ? '' : '.ghost'), { type: 'button', onclick: () => pick(x.id) }, t('manage')))),
+      h('label.field', { style: 'margin-top:10px' }, h('span', t('church')), sel)));
   }
 
   // Team leader invitation and team management
@@ -1172,7 +1211,7 @@ async function viewLeader() {
   out.push(h('div.card', h('h2', icon('book'), t('recent')),
     d.entries.length ? d.entries.map((en) => h('div.story',
       h('div', { style: 'flex:1' },
-        h('b', en.day), en.team ? ` · ${en.team}` : '', ' · ', h('span.small.muted', en.entered_by === 'elder' ? t('by_elder') : t('by_leader')),
+        h('b', en.day), en.team ? ` · ${en.team}` : '', ' · ', h('span.small.muted', t('by_' + (en.entered_by || 'leader'))),
         h('div.small', METRICS.filter((m) => en[m.key]).map((m) => `${t(m.key)}: ${en[m.key]}`)
           .concat(en.practiced ? [`${t('practiced')}: ${en.practiced}`] : []).join(' · '))),
       h('button.btn.sm.danger', { type: 'button', onclick: async () => {
@@ -1185,7 +1224,7 @@ async function viewLeader() {
   out.push(h('p.footer-links', h('a', { href: '#', onclick: (e) => {
     e.preventDefault();
     sessionStorage.removeItem('leaderPin'); sessionStorage.removeItem('leaderChurch');
-    if (d.role === 'elder') location.hash = '#/admin'; else route();
+    if (d.role === 'admin') location.hash = '#/admin'; else route();
   } }, t('log_out'))));
   return out;
 }

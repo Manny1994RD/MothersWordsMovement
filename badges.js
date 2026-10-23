@@ -18,6 +18,8 @@ const MEMBER_TIERED = [
   { id: 'streak', icon: 'flame', steps: [3, 7, 14, 21, 30] },
   { id: 'all9', icon: 'star', steps: [1, 3, 7, 14, 21] },
   { id: 'ticks', icon: 'book', steps: [25, 75, 150, 250, 360] },
+  { id: 'focus', icon: 'daisy', steps: [1, 5, 10, 20, 30] },        // practiced the day's focus phrase
+  { id: 'team_pride', icon: 'bouquet', steps: [2, 3, 4, 5, 6] },   // your team reached level N
 ];
 
 // Longest run of consecutive dates in a sorted list of YYYY-MM-DD strings.
@@ -70,14 +72,22 @@ function teamBadges(team, reports, info, championWeeks) {
 }
 
 // ticks: [{day, item_id}] for one member; itemIds: checklist ids in display order.
-function memberBadges({ ticks, itemIds, stories, cheers, joined }) {
+function memberBadges({ ticks, itemIds, stories, cheers, joined, startDate, teamLevel, teamChampion, shares }) {
   const byDay = new Map();
   const byItem = new Map();
   for (const t of ticks) {
     byDay.set(t.day, (byDay.get(t.day) || 0) + 1);
     byItem.set(t.item_id, (byItem.get(t.item_id) || 0) + 1);
   }
+  // The focus phrase rotates daily through the checklist, in display order.
+  const start = Date.parse(startDate + 'T00:00:00Z');
+  const focusDays = new Set(ticks.filter((t) => {
+    const n = Math.round((Date.parse(t.day + 'T00:00:00Z') - start) / 86400000);
+    return itemIds.length && itemIds[((n % itemIds.length) + itemIds.length) % itemIds.length] === t.item_id;
+  }).map((t) => t.day));
   const values = {
+    focus: focusDays.size,
+    team_pride: teamLevel,
     streak: longestRun([...byDay.keys()]),
     all9: [...byDay.values()].filter((n) => n >= itemIds.length && itemIds.length > 0).length,
     ticks: ticks.length,
@@ -89,6 +99,9 @@ function memberBadges({ ticks, itemIds, stories, cheers, joined }) {
     { id: 'storyteller', icon: 'letters', earned: stories >= 1 },
     { id: 'supporter', icon: 'prayers', earned: cheers >= 10 },
     { id: 'super_supporter', icon: 'prayers', tier: 'gold', earned: cheers >= 50 },
+    { id: 'messenger', icon: 'share', earned: shares >= 1 },
+    { id: 'herald', icon: 'share', tier: 'gold', earned: shares >= 10 },
+    { id: 'champion_member', icon: 'trophy', earned: teamChampion >= 1 },
   ];
   // One "master" badge per phrase, practiced 10 times.
   const phrases = itemIds.slice(0, 12).map((id, i) => ({
